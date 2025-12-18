@@ -1,24 +1,31 @@
 package ssonin.nvstech;
 
+import io.vertx.core.DeploymentOptions;
 import io.vertx.core.Future;
 import io.vertx.core.VerticleBase;
-import org.slf4j.Logger;
+import io.vertx.core.json.JsonObject;
+import ssonin.nvstech.api.ApiVerticle;
 
-import static org.slf4j.LoggerFactory.getLogger;
+import java.util.Optional;
+
+import static java.util.function.Predicate.not;
 
 public final class App extends VerticleBase {
 
-  private static final Logger LOG = getLogger(App.class);
+  public static final int DEFAULT_HTTP_PORT = 8888;
 
   @Override
   public Future<?> start() {
-    return vertx.createHttpServer().requestHandler(req -> {
-      LOG.info("Received request {} ", req.path());
-      req.response()
-        .putHeader("content-type", "text/plain")
-        .end("Hello from Vert.x!");
-    }).listen(8888).onSuccess(http -> {
-      LOG.info("HTTP server started on port 8888");
-    });
+    final var config = new JsonObject().put("http.port", httpPort());
+    final var options = new DeploymentOptions().setConfig(config);
+    return vertx.deployVerticle(new ApiVerticle(), options);
+  }
+
+  private static int httpPort() {
+    return Optional.ofNullable(System.getenv("HTTP_PORT"))
+      .or(() -> Optional.ofNullable(System.getenv("PORT")))
+      .filter(not(String::isBlank))
+      .map(Integer::parseInt)
+      .orElse(DEFAULT_HTTP_PORT);
   }
 }

@@ -17,7 +17,7 @@ repositories {
 val junitJupiterVersion = "5.9.1"
 val logbackVersion = "1.5.21"
 val slf4jVersion = "2.0.17"
-val vertxVersion = "5.0.5"
+val vertxVersion = "5.0.6"
 
 val mainVerticleName = "ssonin.nvstech.App"
 val launcherClassName = "io.vertx.launcher.application.VertxApplication"
@@ -32,6 +32,7 @@ dependencies {
   implementation("ch.qos.logback:logback-classic:${logbackVersion}")
   implementation("io.vertx:vertx-core")
   implementation("io.vertx:vertx-launcher-application")
+  implementation("io.vertx:vertx-web")
   implementation("org.slf4j:slf4j-api:${slf4jVersion}")
 
   testImplementation("io.vertx:vertx-junit5")
