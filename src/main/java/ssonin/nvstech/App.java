@@ -8,6 +8,7 @@ import io.vertx.pgclient.PgConnectOptions;
 import org.flywaydb.core.Flyway;
 import org.flywaydb.core.api.output.MigrateResult;
 import ssonin.nvstech.api.ApiVerticle;
+import ssonin.nvstech.repository.RepositoryVerticle;
 
 import java.util.Optional;
 
@@ -19,16 +20,19 @@ public final class App extends VerticleBase {
 
   @Override
   public Future<?> start() {
-    final var dbConfig = dbConfig();
+    final var dbConfig = PgConnectOptions.fromEnv();
     final var config = new JsonObject()
       .put("http.port", httpPort())
       .put("db", dbConfig.toJson());
     final var options = new DeploymentOptions().setConfig(config);
-    return vertx.executeBlocking(() -> runMigration(dbConfig))
-      .compose(ar -> vertx.deployVerticle(new ApiVerticle(), options));
+    return vertx.executeBlocking(() -> runDbMigration(dbConfig))
+      .compose(__ -> Future.all(
+        vertx.deployVerticle(new ApiVerticle(), options),
+        vertx.deployVerticle(new RepositoryVerticle(), options))
+      );
   }
 
-  private MigrateResult runMigration(PgConnectOptions db) {
+  private MigrateResult runDbMigration(PgConnectOptions db) {
     final var url = "jdbc:postgresql://%s:%d/%s".formatted(db.getHost(), db.getPort(), db.getDatabase());
     return Flyway.configure()
       .dataSource(url, db.getUser(), db.getPassword())
@@ -36,10 +40,6 @@ public final class App extends VerticleBase {
       .schemas("public")
       .load()
       .migrate();
-  }
-
-  private static PgConnectOptions dbConfig() {
-    return PgConnectOptions.fromEnv();
   }
 
   private static int httpPort() {
