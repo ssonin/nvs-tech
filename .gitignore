@@ -69,6 +69,7 @@ local.properties
 .idea/**/dataSources.xml
 .idea/**/dataSources.local.xml
 .idea/**/sqlDataSources.xml
+.idea/**/sqldialects.xml
 .idea/**/dynamic.xml
 .idea/**/uiDesigner.xml
 
