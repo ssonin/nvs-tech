@@ -2,6 +2,7 @@ package ssonin.nvstech.api;
 
 import io.vertx.core.Future;
 import io.vertx.core.VerticleBase;
+import io.vertx.core.eventbus.Message;
 import io.vertx.core.eventbus.ReplyException;
 import io.vertx.core.json.JsonObject;
 import io.vertx.ext.web.Router;
@@ -38,6 +39,9 @@ public final class ApiVerticle extends VerticleBase {
       .get(API_V_1 + "/clients/:clientId")
       .handler(this::getClient);
     router
+      .post(API_V_1 + "/clients/:clientId/documents")
+      .handler(this::createDocument);
+    router
       .route()
       .failureHandler(this::handleError);
     return vertx
@@ -47,13 +51,21 @@ public final class ApiVerticle extends VerticleBase {
       .onSuccess(httpServer -> LOG.info("HTTP server started on port {}", httpServer.actualPort()));
   }
 
+  private void createClient(RoutingContext ctx) {
+    final var payload = ctx.body().asJsonObject();
+    vertx.eventBus()
+      .<JsonObject>request("clients.create", payload)
+      .onSuccess(reply ->
+        ctx.response()
+          .setStatusCode(201)
+          .putHeader("Location", "%s/%s".formatted(ctx.request().absoluteURI(), reply.body().getString("id")))
+          .putHeader("Content-Type", "application/json")
+          .end(reply.body().toString()))
+      .onFailure(ctx::fail);
+  }
+
   private void getClient(RoutingContext ctx) {
-    uuidPathParam(ctx)
-      .compose(clientId -> {
-        final var payload = new JsonObject().put("clientId", clientId.toString());
-        return vertx.eventBus()
-          .<JsonObject>request("client.get", payload);
-      })
+    fetchClient(ctx)
       .onSuccess(reply ->
         ctx.response()
           .setStatusCode(200)
@@ -62,10 +74,14 @@ public final class ApiVerticle extends VerticleBase {
       .onFailure(ctx::fail);
   }
 
-  private void createClient(RoutingContext ctx) {
-    final var payload = ctx.body().asJsonObject();
-    vertx.eventBus()
-      .<JsonObject>request("client.create", payload)
+  private void createDocument(RoutingContext ctx) {
+    fetchClient(ctx)
+      .compose(client -> {
+        final var payload = ctx.body().asJsonObject();
+        payload.put("client_id", client.body().getString("id"));
+        return vertx.eventBus()
+          .<JsonObject>request("documents.create", payload);
+      })
       .onSuccess(reply ->
         ctx.response()
           .setStatusCode(201)
@@ -73,6 +89,15 @@ public final class ApiVerticle extends VerticleBase {
           .putHeader("Content-Type", "application/json")
           .end(reply.body().toString()))
       .onFailure(ctx::fail);
+  }
+
+  private Future<Message<JsonObject>> fetchClient(RoutingContext ctx) {
+    return uuidPathParam(ctx)
+      .compose(clientId -> {
+        final var payload = new JsonObject().put("clientId", clientId.toString());
+        return vertx.eventBus()
+          .request("clients.get", payload);
+      });
   }
 
   private Future<UUID> uuidPathParam(RoutingContext ctx) {

@@ -17,8 +17,7 @@ import org.slf4j.Logger;
 import static io.vertx.core.Future.succeededFuture;
 import static java.util.UUID.randomUUID;
 import static org.slf4j.LoggerFactory.getLogger;
-import static ssonin.nvstech.repository.SqlQueries.insertClient;
-import static ssonin.nvstech.repository.SqlQueries.selectClient;
+import static ssonin.nvstech.repository.SqlQueries.*;
 
 public final class RepositoryVerticle extends VerticleBase {
 
@@ -36,8 +35,9 @@ public final class RepositoryVerticle extends VerticleBase {
       .using(vertx)
       .build();
     final var eb = vertx.eventBus();
-    eb.consumer("client.create", this::createClient);
-    eb.consumer("client.get", this::getClient);
+    eb.consumer("clients.create", this::createClient);
+    eb.consumer("clients.get", this::getClient);
+    eb.consumer("documents.create", this::createDocument);
     return succeededFuture();
   }
 
@@ -75,6 +75,22 @@ public final class RepositoryVerticle extends VerticleBase {
       .onFailure(handleError(msg));
   }
 
+  private void createDocument(Message<JsonObject> msg) {
+    final var data = msg.body();
+    final var values = Tuple.of(
+      randomUUID(),
+      data.getString("client_id"),
+      data.getString("title"),
+      data.getString("content"));
+    pool
+      .withConnection(conn ->
+        conn.preparedQuery(insertDocument())
+          .execute(values)
+          .map(rows -> documentFromRow(rows.iterator().next())))
+      .onSuccess(msg::reply)
+      .onFailure(handleError(msg));
+  }
+
   private JsonObject clientFromRow(Row row) {
     return new JsonObject()
       .put("id", row.getUUID("id").toString())
@@ -84,14 +100,23 @@ public final class RepositoryVerticle extends VerticleBase {
       .put("description", row.getString("description"));
   }
 
+  private JsonObject documentFromRow(Row row) {
+    return new JsonObject()
+      .put("id", row.getUUID("id").toString())
+      .put("client_id", row.getUUID("client_id").toString())
+      .put("title", row.getString("title"))
+      .put("content", row.getString("content"))
+      .put("created_at", row.getOffsetDateTime("created_at").toString());
+  }
+
   private static Handler<Throwable> handleError(Message<JsonObject> msg) {
     return e -> {
+      LOG.error("Failed to execute query", e);
       if (duplicateKeyInsert(e)) {
         msg.fail(409, "Email is already in use");
-      } else if (e instanceof NotFoundException){
+      } else if (e instanceof NotFoundException) {
         msg.fail(404, e.getMessage());
-      }
-      else {
+      } else {
         msg.fail(500, "Something went wrong");
       }
     };
