@@ -36,8 +36,9 @@ public final class App extends VerticleBase {
     final var url = "jdbc:postgresql://%s:%d/%s".formatted(db.getHost(), db.getPort(), db.getDatabase());
     return Flyway.configure()
       .dataSource(url, db.getUser(), db.getPassword())
-      .locations("classpath:ssonin/nvstech/db/migration")
       .schemas("public")
+      .locations("classpath:db/migration")
+      .validateMigrationNaming(true)
       .load()
       .migrate();
   }

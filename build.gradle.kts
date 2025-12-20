@@ -4,7 +4,7 @@ import org.gradle.api.tasks.testing.logging.TestLogEvent.*
 plugins {
   java
   application
-  id("com.gradleup.shadow") version "9.2.2"
+  id("com.github.johnrengelman.shadow") version "8.1.1"
 }
 
 group = "ssonin"
@@ -14,7 +14,7 @@ repositories {
   mavenCentral()
 }
 
-val flywayVersion = "11.19.1"
+val flywayVersion = "11.7.2"
 val junitJupiterVersion = "5.9.1"
 val logbackVersion = "1.5.21"
 val postgresqlVersion = "42.7.8"

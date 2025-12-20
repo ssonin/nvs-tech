@@ -25,5 +25,37 @@ services:
       timeout: 5s
       retries: 5
 
+    networks:
+      - nvs-tech-network
+
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: nvs-tech-app
+#    restart: unless-stopped
+
+    environment:
+      PGHOST: postgres
+      PGPORT: 5432
+      PGDATABASE: ${PGDATABASE:-nvs_tech}
+      PGUSER: ${PGUSER:-nvs_tech}
+      PGPASSWORD: ${PGPASSWORD:-nvs_tech}
+      HTTP_PORT: ${HTTP_PORT:-8888}
+
+    ports:
+      - "127.0.0.1:8888:8888"
+
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+    networks:
+      - nvs-tech-network
+
 volumes:
   nvs_tech_postgres_data:
+
+networks:
+  nvs-tech-network:
+    driver: bridge
