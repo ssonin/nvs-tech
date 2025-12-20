@@ -10,6 +10,7 @@ import io.vertx.pgclient.PgConnectOptions;
 import io.vertx.pgclient.PgException;
 import io.vertx.sqlclient.Pool;
 import io.vertx.sqlclient.PoolOptions;
+import io.vertx.sqlclient.Row;
 import io.vertx.sqlclient.Tuple;
 import org.slf4j.Logger;
 
@@ -17,6 +18,7 @@ import static io.vertx.core.Future.succeededFuture;
 import static java.util.UUID.randomUUID;
 import static org.slf4j.LoggerFactory.getLogger;
 import static ssonin.nvstech.repository.SqlQueries.insertClient;
+import static ssonin.nvstech.repository.SqlQueries.selectClient;
 
 public final class RepositoryVerticle extends VerticleBase {
 
@@ -35,6 +37,7 @@ public final class RepositoryVerticle extends VerticleBase {
       .build();
     final var eb = vertx.eventBus();
     eb.consumer("client.create", this::createClient);
+    eb.consumer("client.get", this::getClient);
     return succeededFuture();
   }
 
@@ -50,25 +53,45 @@ public final class RepositoryVerticle extends VerticleBase {
       .withConnection(conn ->
         conn.preparedQuery(insertClient())
           .execute(values)
+          .map(rows -> clientFromRow(rows.iterator().next())))
+      .onSuccess(msg::reply)
+      .onFailure(handleError(msg));
+  }
+
+  private void getClient(Message<JsonObject> msg) {
+    final var clientId = msg.body().getString("clientId");
+    pool
+      .withConnection(conn ->
+        conn.preparedQuery(selectClient())
+          .execute(Tuple.of(clientId))
           .map(rows -> {
-            final var rs = rows.iterator().next();
-            return new JsonObject()
-              .put("id", rs.getUUID("id").toString())
-              .put("first_name", rs.getString("first_name"))
-              .put("last_name", rs.getString("last_name"))
-              .put("email", rs.getString("email"))
-              .put("description", rs.getString("description"));
+            final var it = rows.iterator();
+            if (it.hasNext()) {
+              return clientFromRow(it.next());
+            }
+            throw new ClientNotFoundException();
           }))
       .onSuccess(msg::reply)
       .onFailure(handleError(msg));
   }
 
+  private JsonObject clientFromRow(Row row) {
+    return new JsonObject()
+      .put("id", row.getUUID("id").toString())
+      .put("first_name", row.getString("first_name"))
+      .put("last_name", row.getString("last_name"))
+      .put("email", row.getString("email"))
+      .put("description", row.getString("description"));
+  }
+
   private static Handler<Throwable> handleError(Message<JsonObject> msg) {
     return e -> {
-      LOG.error("Failed to create client", e);
       if (duplicateKeyInsert(e)) {
-        msg.fail(422, "Email is already in use");
-      } else {
+        msg.fail(409, "Email is already in use");
+      } else if (e instanceof NotFoundException){
+        msg.fail(404, e.getMessage());
+      }
+      else {
         msg.fail(500, "Something went wrong");
       }
     };

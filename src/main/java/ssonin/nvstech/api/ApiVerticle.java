@@ -7,9 +7,14 @@ import io.vertx.core.json.JsonObject;
 import io.vertx.ext.web.Router;
 import io.vertx.ext.web.RoutingContext;
 import io.vertx.ext.web.handler.BodyHandler;
+import io.vertx.ext.web.handler.HttpException;
 import io.vertx.ext.web.handler.LoggerHandler;
 import org.slf4j.Logger;
 
+import java.util.UUID;
+
+import static io.vertx.core.Future.failedFuture;
+import static io.vertx.core.Future.succeededFuture;
 import static org.slf4j.LoggerFactory.getLogger;
 
 public final class ApiVerticle extends VerticleBase {
@@ -31,7 +36,7 @@ public final class ApiVerticle extends VerticleBase {
       .handler(this::createClient);
     router
       .get(API_V_1 + "/clients/:clientId")
-      .handler(this::fetchClient);
+      .handler(this::getClient);
     router
       .route()
       .failureHandler(this::handleError);
@@ -42,23 +47,25 @@ public final class ApiVerticle extends VerticleBase {
       .onSuccess(httpServer -> LOG.info("HTTP server started on port {}", httpServer.actualPort()));
   }
 
-  private void fetchClient(RoutingContext ctx) {
-    final var userId = ctx.pathParam("clientId");
-    final var payload = new JsonObject()
-      .put("id", userId)
-      .put("first_name", "Foo")
-      .put("last_name", "Bar")
-      .put("email", "foobar@nvs.com")
-      .put("description", "Bamboozled");
-    ctx.response()
-      .putHeader("Content-Type", "application/json")
-      .end(payload.encode());
+  private void getClient(RoutingContext ctx) {
+    uuidPathParam(ctx)
+      .compose(clientId -> {
+        final var payload = new JsonObject().put("clientId", clientId.toString());
+        return vertx.eventBus()
+          .<JsonObject>request("client.get", payload);
+      })
+      .onSuccess(reply ->
+        ctx.response()
+          .setStatusCode(200)
+          .putHeader("Content-Type", "application/json")
+          .end(reply.body().toString()))
+      .onFailure(ctx::fail);
   }
 
   private void createClient(RoutingContext ctx) {
     final var payload = ctx.body().asJsonObject();
-    final var eb = vertx.eventBus();
-    eb.<JsonObject>request("client.create", payload)
+    vertx.eventBus()
+      .<JsonObject>request("client.create", payload)
       .onSuccess(reply ->
         ctx.response()
           .setStatusCode(201)
@@ -68,16 +75,33 @@ public final class ApiVerticle extends VerticleBase {
       .onFailure(ctx::fail);
   }
 
+  private Future<UUID> uuidPathParam(RoutingContext ctx) {
+    final var clientId = ctx.pathParam("clientId");
+    try {
+      return succeededFuture(UUID.fromString(clientId));
+    } catch (IllegalArgumentException e) {
+      LOG.warn("Invalid client ID: {}", clientId);
+      return failedFuture(new HttpException(400, "Invalid client ID", e));
+    }
+  }
+
   private void handleError(RoutingContext ctx) {
-    final var e = ctx.failure();
-    if (e instanceof ReplyException re) {
+    final var failure = ctx.failure();
+    if (failure instanceof ReplyException e) {
       ctx.response()
-        .setStatusCode(re.failureCode())
+        .setStatusCode(e.failureCode())
         .putHeader("Content-Type", "application/json")
-        .end(new JsonObject().put("error", re.getMessage()).encode());
+        .end(new JsonObject().put("error", e.getMessage()).encode());
       return;
     }
-    LOG.error("Unhandled error", e);
+    if (failure instanceof HttpException e) {
+      ctx.response()
+        .setStatusCode(e.getStatusCode())
+        .putHeader("Content-Type", "application/json")
+        .end(new JsonObject().put("error", e.getPayload()).encode());
+      return;
+    }
+    LOG.error("Unhandled error", failure);
     ctx.response()
       .setStatusCode(500)
       .putHeader("Content-Type", "application/json")
