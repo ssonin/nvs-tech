@@ -12,9 +12,11 @@ import io.vertx.pgclient.PgException;
 import io.vertx.sqlclient.*;
 import org.slf4j.Logger;
 
+import java.util.Comparator;
 import java.util.stream.Stream;
 
 import static io.vertx.core.Future.succeededFuture;
+import static java.util.Comparator.comparingDouble;
 import static java.util.UUID.randomUUID;
 import static org.slf4j.LoggerFactory.getLogger;
 import static ssonin.nvstech.repository.SqlQueries.*;
@@ -95,13 +97,17 @@ public final class RepositoryVerticle extends VerticleBase {
   private void search(Message<JsonObject> msg) {
     final var query = msg.body().getString("query");
     final var values = Tuple.of(query);
+    final Comparator<JsonObject> byRank = comparingDouble(it -> it.getDouble("rank"));
     Future.all(
         searchClients(values),
         searchDocuments(values))
       .map(composite -> {
         final JsonArray clients = composite.resultAt(0);
         final JsonArray documents = composite.resultAt(1);
-        final var results = Stream.concat(clients.stream(), documents.stream()).toList();
+        final var results = Stream.concat(clients.stream(), documents.stream())
+          .map(it -> (JsonObject) it)
+          .sorted(byRank.reversed())
+          .toList();
         return new JsonArray(results);
       })
       .onSuccess(msg::reply)
@@ -116,7 +122,7 @@ public final class RepositoryVerticle extends VerticleBase {
           .map(rows -> {
             final var result = new JsonArray();
             for (final var row : rows) {
-              result.add(clientSearchEntryFromRow(row));
+              result.add(clientSearchResultFromRow(row));
             }
             return result;
           }));
@@ -130,7 +136,7 @@ public final class RepositoryVerticle extends VerticleBase {
           .map(rows -> {
             final var result = new JsonArray();
             for (final var row : rows) {
-              result.add(documentSearchEntryFromRow(row));
+              result.add(documentSearchResutFromRow(row));
             }
             return result;
           }));
@@ -155,13 +161,15 @@ public final class RepositoryVerticle extends VerticleBase {
       .put("content", row.getString("content"));
   }
 
-  private JsonObject clientSearchEntryFromRow(Row row) {
+  private JsonObject clientSearchResultFromRow(Row row) {
     return clientFromRow(row)
+      .put("type", row.getString("type"))
       .put("rank", row.getDouble("rank"));
   }
 
-  private JsonObject documentSearchEntryFromRow(Row row) {
+  private JsonObject documentSearchResutFromRow(Row row) {
     return documentFromRow(row)
+      .put("type", row.getString("type"))
       .put("rank", row.getDouble("rank"));
   }
 
