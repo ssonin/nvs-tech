@@ -4,6 +4,7 @@ import io.vertx.core.Future;
 import io.vertx.core.VerticleBase;
 import io.vertx.core.eventbus.Message;
 import io.vertx.core.eventbus.ReplyException;
+import io.vertx.core.json.JsonArray;
 import io.vertx.core.json.JsonObject;
 import io.vertx.ext.web.Router;
 import io.vertx.ext.web.RoutingContext;
@@ -41,6 +42,9 @@ public final class ApiVerticle extends VerticleBase {
     router
       .post(API_V_1 + "/clients/:clientId/documents")
       .handler(this::createDocument);
+    router
+      .get(API_V_1 + "/search")
+      .handler(this::search);
     router
       .route()
       .failureHandler(this::handleError);
@@ -86,6 +90,19 @@ public final class ApiVerticle extends VerticleBase {
         ctx.response()
           .setStatusCode(201)
           .putHeader("Location", "%s/%s".formatted(ctx.request().absoluteURI(), reply.body().getString("id")))
+          .putHeader("Content-Type", "application/json")
+          .end(reply.body().toString()))
+      .onFailure(ctx::fail);
+  }
+
+  private void search(RoutingContext ctx) {
+    final var query = ctx.request().getParam("q").toLowerCase();
+    final var payload = new JsonObject().put("query", query);
+    vertx.eventBus()
+      .<JsonArray>request("search", payload)
+      .onSuccess(reply ->
+        ctx.response()
+          .setStatusCode(200)
           .putHeader("Content-Type", "application/json")
           .end(reply.body().toString()))
       .onFailure(ctx::fail);

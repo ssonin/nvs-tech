@@ -1,6 +1,8 @@
 services:
   postgres:
-    image: postgres:16-alpine
+    build:
+      context: .
+      dockerfile: postgres.Dockerfile
     container_name: nvs-tech-postgres
     restart: unless-stopped
 
@@ -33,7 +35,6 @@ services:
       context: .
       dockerfile: Dockerfile
     container_name: nvs-tech-app
-#    restart: unless-stopped
 
     environment:
       PGHOST: postgres

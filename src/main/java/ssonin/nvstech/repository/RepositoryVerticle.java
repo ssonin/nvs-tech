@@ -4,15 +4,15 @@ import io.vertx.core.Future;
 import io.vertx.core.Handler;
 import io.vertx.core.VerticleBase;
 import io.vertx.core.eventbus.Message;
+import io.vertx.core.json.JsonArray;
 import io.vertx.core.json.JsonObject;
 import io.vertx.pgclient.PgBuilder;
 import io.vertx.pgclient.PgConnectOptions;
 import io.vertx.pgclient.PgException;
-import io.vertx.sqlclient.Pool;
-import io.vertx.sqlclient.PoolOptions;
-import io.vertx.sqlclient.Row;
-import io.vertx.sqlclient.Tuple;
+import io.vertx.sqlclient.*;
 import org.slf4j.Logger;
+
+import java.util.stream.Stream;
 
 import static io.vertx.core.Future.succeededFuture;
 import static java.util.UUID.randomUUID;
@@ -38,6 +38,7 @@ public final class RepositoryVerticle extends VerticleBase {
     eb.consumer("clients.create", this::createClient);
     eb.consumer("clients.get", this::getClient);
     eb.consumer("documents.create", this::createDocument);
+    eb.consumer("search", this::search);
     return succeededFuture();
   }
 
@@ -91,9 +92,54 @@ public final class RepositoryVerticle extends VerticleBase {
       .onFailure(handleError(msg));
   }
 
+  private void search(Message<JsonObject> msg) {
+    final var query = msg.body().getString("query");
+    final var values = Tuple.of(query);
+    Future.all(
+        searchClients(values),
+        searchDocuments(values))
+      .map(composite -> {
+        final JsonArray clients = composite.resultAt(0);
+        final JsonArray documents = composite.resultAt(1);
+        final var results = Stream.concat(clients.stream(), documents.stream()).toList();
+        return new JsonArray(results);
+      })
+      .onSuccess(msg::reply)
+      .onFailure(handleError(msg));
+  }
+
+  private Future<JsonArray> searchClients(Tuple values) {
+    return pool
+      .withConnection(conn ->
+        conn.preparedQuery(SqlQueries.searchClients())
+          .execute(values)
+          .map(rows -> {
+            final var result = new JsonArray();
+            for (final var row : rows) {
+              result.add(clientSearchEntryFromRow(row));
+            }
+            return result;
+          }));
+  }
+
+  private Future<JsonArray> searchDocuments(Tuple values) {
+    return pool
+      .withConnection(conn ->
+        conn.preparedQuery(SqlQueries.searchDocuments())
+          .execute(values)
+          .map(rows -> {
+            final var result = new JsonArray();
+            for (final var row : rows) {
+              result.add(documentSearchEntryFromRow(row));
+            }
+            return result;
+          }));
+  }
+
   private JsonObject clientFromRow(Row row) {
     return new JsonObject()
       .put("id", row.getUUID("id").toString())
+      .put("created_at", row.getOffsetDateTime("created_at").toString())
       .put("first_name", row.getString("first_name"))
       .put("last_name", row.getString("last_name"))
       .put("email", row.getString("email"))
@@ -103,10 +149,20 @@ public final class RepositoryVerticle extends VerticleBase {
   private JsonObject documentFromRow(Row row) {
     return new JsonObject()
       .put("id", row.getUUID("id").toString())
+      .put("created_at", row.getOffsetDateTime("created_at").toString())
       .put("client_id", row.getUUID("client_id").toString())
       .put("title", row.getString("title"))
-      .put("content", row.getString("content"))
-      .put("created_at", row.getOffsetDateTime("created_at").toString());
+      .put("content", row.getString("content"));
+  }
+
+  private JsonObject clientSearchEntryFromRow(Row row) {
+    return clientFromRow(row)
+      .put("rank", row.getDouble("rank"));
+  }
+
+  private JsonObject documentSearchEntryFromRow(Row row) {
+    return documentFromRow(row)
+      .put("rank", row.getDouble("rank"));
   }
 
   private static Handler<Throwable> handleError(Message<JsonObject> msg) {
