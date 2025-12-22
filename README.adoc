@@ -589,7 +589,6 @@ java -jar build/libs/nvs-tech-1.0.0-SNAPSHOT-fat.jar
 
 === Current Limitations
 
-* *No payload validation*: API accepts any JSON; validation may be added if time permits
 * *No document content summarisation*: The optional feature has not been implemented
 * *Limited error messages*: Error responses are basic and could be more descriptive
 * *No pagination*: Search results return all matches (acceptable for small datasets)

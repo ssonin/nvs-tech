@@ -14,11 +14,14 @@ repositories {
   mavenCentral()
 }
 
+val assertjVersion = "3.27.3"
 val flywayVersion = "11.7.2"
 val junitJupiterVersion = "5.9.1"
 val logbackVersion = "1.5.21"
 val postgresqlVersion = "42.7.8"
 val slf4jVersion = "2.0.17"
+val systemStubsVersion = "2.1.7"
+val testcontainersVersion = "1.21.4"
 val vertxVersion = "5.0.6"
 
 val mainVerticleName = "ssonin.nvstech.App"
@@ -30,9 +33,9 @@ application {
 
 dependencies {
   implementation(platform("io.vertx:vertx-stack-depchain:$vertxVersion"))
-
   implementation("ch.qos.logback:logback-classic:${logbackVersion}")
   implementation("io.vertx:vertx-core")
+  implementation("io.vertx:vertx-json-schema")
   implementation("io.vertx:vertx-launcher-application")
   implementation("io.vertx:vertx-pg-client")
   implementation("io.vertx:vertx-web")
@@ -42,8 +45,15 @@ dependencies {
 
   runtimeOnly("org.postgresql:postgresql:${postgresqlVersion}")
 
+  testImplementation(platform("org.testcontainers:testcontainers-bom:$testcontainersVersion"))
   testImplementation("io.vertx:vertx-junit5")
+  testImplementation("io.vertx:vertx-web-client")
+  testImplementation("org.assertj:assertj-core:${assertjVersion}")
   testImplementation("org.junit.jupiter:junit-jupiter:$junitJupiterVersion")
+  testImplementation("org.testcontainers:testcontainers")
+  testImplementation("org.testcontainers:junit-jupiter")
+  testImplementation("org.testcontainers:postgresql")
+  testImplementation("uk.org.webcompere:system-stubs-jupiter:${systemStubsVersion}")
 
   testRuntimeOnly("org.junit.platform:junit-platform-launcher")
 }
