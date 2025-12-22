@@ -1,0 +1,275 @@
+{
+	"info": {
+		"_postman_id": "53d3a111-e73c-4725-991c-0735f6608156",
+		"name": "nvs-tech",
+		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+		"_exporter_id": "3791104"
+	},
+	"item": [
+		{
+			"name": "Create client",
+			"request": {
+				"method": "POST",
+				"header": [],
+				"body": {
+					"mode": "raw",
+					"raw": "{\n  \"first_name\": \"Chandler\",\n  \"last_name\": \"Bing\",\n  \"email\": \"chandler.bing@neviswealth.com\",\n  \"description\": \"Sarcastic, self-deprecating office worker with a sharp sense of humor, known for cracking jokes to deflect awkward situations.\"\n}",
+					"options": {
+						"raw": {
+							"language": "json"
+						}
+					}
+				},
+				"url": {
+					"raw": "localhost:8888/api/v1/clients",
+					"host": [
+						"localhost"
+					],
+					"port": "8888",
+					"path": [
+						"api",
+						"v1",
+						"clients"
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "Get client",
+			"protocolProfileBehavior": {
+				"disableBodyPruning": true
+			},
+			"request": {
+				"method": "GET",
+				"header": [],
+				"body": {
+					"mode": "raw",
+					"raw": "{\n  \"first_name\": \"Chandler\",\n  \"last_name\": \"Bing\",\n  \"email\": \"chandler.bing@example.com\",\n  \"description\": \"Sarcastic, self-deprecating office worker with a sharp sense of humor, known for cracking jokes to deflect awkward situations.\"\n}"
+				},
+				"url": {
+					"raw": "localhost:8888/api/v1/clients/:id",
+					"host": [
+						"localhost"
+					],
+					"port": "8888",
+					"path": [
+						"api",
+						"v1",
+						"clients",
+						":id"
+					],
+					"variable": [
+						{
+							"key": "id",
+							"value": "223872d3-3ea0-4f66-8791-f76a6513dd48"
+						}
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "Create document",
+			"request": {
+				"method": "POST",
+				"header": [],
+				"body": {
+					"mode": "raw",
+					"raw": "{\n    \"title\": \"Chandler Bing's Utility Bill of Awkwardness\",\n    \"content\": \"This official-looking utility bill details the excessive energy I've wasted trying to explain my job to my parents and the high emotional charges from every failed relationship since Janice. It also includes a surprise late fee for that one time I accidentally proposed, because apparently sarcasm doesn't show up on the meter. Could this BE any more expensive?\"\n}",
+					"options": {
+						"raw": {
+							"language": "json"
+						}
+					}
+				},
+				"url": {
+					"raw": "localhost:8888/api/v1/clients/:id/documents",
+					"host": [
+						"localhost"
+					],
+					"port": "8888",
+					"path": [
+						"api",
+						"v1",
+						"clients",
+						":id",
+						"documents"
+					],
+					"variable": [
+						{
+							"key": "id",
+							"value": "221eafd7-4602-4185-9492-8e450cbf57f6"
+						}
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "Search \"utility bill\"",
+			"protocolProfileBehavior": {
+				"disableBodyPruning": true
+			},
+			"request": {
+				"method": "GET",
+				"header": [],
+				"body": {
+					"mode": "raw",
+					"raw": "{\n  \"first_name\": \"Chandler\",\n  \"last_name\": \"Bing\",\n  \"email\": \"chandler.bing@example.com\",\n  \"description\": \"Sarcastic, self-deprecating office worker with a sharp sense of humor, known for cracking jokes to deflect awkward situations.\"\n}"
+				},
+				"url": {
+					"raw": "localhost:8888/api/v1/search?q=utility+bill",
+					"host": [
+						"localhost"
+					],
+					"port": "8888",
+					"path": [
+						"api",
+						"v1",
+						"search"
+					],
+					"query": [
+						{
+							"key": "q",
+							"value": "utility+bill"
+						}
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "Search \"address proof\"",
+			"protocolProfileBehavior": {
+				"disableBodyPruning": true
+			},
+			"request": {
+				"method": "GET",
+				"header": [],
+				"body": {
+					"mode": "raw",
+					"raw": "{\n  \"first_name\": \"Chandler\",\n  \"last_name\": \"Bing\",\n  \"email\": \"chandler.bing@example.com\",\n  \"description\": \"Sarcastic, self-deprecating office worker with a sharp sense of humor, known for cracking jokes to deflect awkward situations.\"\n}"
+				},
+				"url": {
+					"raw": "localhost:8888/api/v1/search?q=address+proof",
+					"host": [
+						"localhost"
+					],
+					"port": "8888",
+					"path": [
+						"api",
+						"v1",
+						"search"
+					],
+					"query": [
+						{
+							"key": "q",
+							"value": "address+proof"
+						}
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "Search \"neviswealth\"",
+			"protocolProfileBehavior": {
+				"disableBodyPruning": true
+			},
+			"request": {
+				"method": "GET",
+				"header": [],
+				"body": {
+					"mode": "raw",
+					"raw": "{\n  \"first_name\": \"Chandler\",\n  \"last_name\": \"Bing\",\n  \"email\": \"chandler.bing@example.com\",\n  \"description\": \"Sarcastic, self-deprecating office worker with a sharp sense of humor, known for cracking jokes to deflect awkward situations.\"\n}"
+				},
+				"url": {
+					"raw": "localhost:8888/api/v1/search?q=awkward",
+					"host": [
+						"localhost"
+					],
+					"port": "8888",
+					"path": [
+						"api",
+						"v1",
+						"search"
+					],
+					"query": [
+						{
+							"key": "q",
+							"value": "awkward"
+						}
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "Search \"chandler\"",
+			"protocolProfileBehavior": {
+				"disableBodyPruning": true
+			},
+			"request": {
+				"method": "GET",
+				"header": [],
+				"body": {
+					"mode": "raw",
+					"raw": "{\n  \"first_name\": \"Chandler\",\n  \"last_name\": \"Bing\",\n  \"email\": \"chandler.bing@example.com\",\n  \"description\": \"Sarcastic, self-deprecating office worker with a sharp sense of humor, known for cracking jokes to deflect awkward situations.\"\n}"
+				},
+				"url": {
+					"raw": "localhost:8888/api/v1/search?q=chandler",
+					"host": [
+						"localhost"
+					],
+					"port": "8888",
+					"path": [
+						"api",
+						"v1",
+						"search"
+					],
+					"query": [
+						{
+							"key": "q",
+							"value": "chandler"
+						}
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "Search \"awkward\"",
+			"protocolProfileBehavior": {
+				"disableBodyPruning": true
+			},
+			"request": {
+				"method": "GET",
+				"header": [],
+				"body": {
+					"mode": "raw",
+					"raw": "{\n  \"first_name\": \"Chandler\",\n  \"last_name\": \"Bing\",\n  \"email\": \"chandler.bing@example.com\",\n  \"description\": \"Sarcastic, self-deprecating office worker with a sharp sense of humor, known for cracking jokes to deflect awkward situations.\"\n}"
+				},
+				"url": {
+					"raw": "localhost:8888/api/v1/search?q=awkward",
+					"host": [
+						"localhost"
+					],
+					"port": "8888",
+					"path": [
+						"api",
+						"v1",
+						"search"
+					],
+					"query": [
+						{
+							"key": "q",
+							"value": "awkward"
+						}
+					]
+				}
+			},
+			"response": []
+		}
+	]
+}
