@@ -354,9 +354,10 @@ To use:
 3. Run requests or the entire collection
 
 The collection includes:
-* All CRUD operations
+
+* Create and retrieve operations for clients
+* Create operation for documents
 * Various search scenarios
-* Edge cases (404s, validation errors)
 
 == Architecture & Design Decisions
 
@@ -441,15 +442,19 @@ The search endpoint:
 
 [source,java]
 ----
-Future.all(searchClients(values), searchDocuments(values))
-  .map(composite -> {
-    final JsonArray clients = composite.resultAt(0);
-    final JsonArray documents = composite.resultAt(1);
-    return Stream.concat(clients.stream(), documents.stream())
-      .map(it -> (JsonObject) it)
-      .sorted(comparingDouble(it -> it.getDouble("rank")).reversed())
-      .toList();
-  })
+final Comparator<JsonObject> byRank = comparingDouble(it -> it.getDouble("rank"));
+Future.all(
+  searchClients(values),
+  searchDocuments(values))
+.map(composite -> {
+  final JsonArray clients = composite.resultAt(0);
+  final JsonArray documents = composite.resultAt(1);
+  final var results = Stream.concat(clients.stream(), documents.stream())
+    .map(it -> (JsonObject) it)
+    .sorted(byRank.reversed())
+    .toList();
+  return new JsonArray(results);
+})
 ----
 
 === Why PostgreSQL Full-Text Search?
@@ -578,12 +583,6 @@ Integration tests use Testcontainers to spin up a PostgreSQL instance automatica
 ----
 
 The fat JAR will be available at `build/libs/nvs-tech-1.0.0-SNAPSHOT-fat.jar`.
-
-Run it directly:
-[source,bash]
-----
-java -jar build/libs/nvs-tech-1.0.0-SNAPSHOT-fat.jar
-----
 
 == Known Limitations & Future Enhancements
 

@@ -37,16 +37,9 @@
 		},
 		{
 			"name": "Get client",
-			"protocolProfileBehavior": {
-				"disableBodyPruning": true
-			},
 			"request": {
 				"method": "GET",
 				"header": [],
-				"body": {
-					"mode": "raw",
-					"raw": "{\n  \"first_name\": \"Chandler\",\n  \"last_name\": \"Bing\",\n  \"email\": \"chandler.bing@example.com\",\n  \"description\": \"Sarcastic, self-deprecating office worker with a sharp sense of humor, known for cracking jokes to deflect awkward situations.\"\n}"
-				},
 				"url": {
 					"raw": "localhost:8888/api/v1/clients/:id",
 					"host": [
@@ -62,7 +55,7 @@
 					"variable": [
 						{
 							"key": "id",
-							"value": "223872d3-3ea0-4f66-8791-f76a6513dd48"
+							"value": "93fefda5-2a79-4ead-994f-3d74029fd968"
 						}
 					]
 				}
@@ -99,7 +92,7 @@
 					"variable": [
 						{
 							"key": "id",
-							"value": "221eafd7-4602-4185-9492-8e450cbf57f6"
+							"value": "93fefda5-2a79-4ead-994f-3d74029fd968"
 						}
 					]
 				}
@@ -108,16 +101,9 @@
 		},
 		{
 			"name": "Search \"utility bill\"",
-			"protocolProfileBehavior": {
-				"disableBodyPruning": true
-			},
 			"request": {
 				"method": "GET",
 				"header": [],
-				"body": {
-					"mode": "raw",
-					"raw": "{\n  \"first_name\": \"Chandler\",\n  \"last_name\": \"Bing\",\n  \"email\": \"chandler.bing@example.com\",\n  \"description\": \"Sarcastic, self-deprecating office worker with a sharp sense of humor, known for cracking jokes to deflect awkward situations.\"\n}"
-				},
 				"url": {
 					"raw": "localhost:8888/api/v1/search?q=utility+bill",
 					"host": [
@@ -141,16 +127,9 @@
 		},
 		{
 			"name": "Search \"address proof\"",
-			"protocolProfileBehavior": {
-				"disableBodyPruning": true
-			},
 			"request": {
 				"method": "GET",
 				"header": [],
-				"body": {
-					"mode": "raw",
-					"raw": "{\n  \"first_name\": \"Chandler\",\n  \"last_name\": \"Bing\",\n  \"email\": \"chandler.bing@example.com\",\n  \"description\": \"Sarcastic, self-deprecating office worker with a sharp sense of humor, known for cracking jokes to deflect awkward situations.\"\n}"
-				},
 				"url": {
 					"raw": "localhost:8888/api/v1/search?q=address+proof",
 					"host": [
@@ -174,18 +153,11 @@
 		},
 		{
 			"name": "Search \"neviswealth\"",
-			"protocolProfileBehavior": {
-				"disableBodyPruning": true
-			},
 			"request": {
 				"method": "GET",
 				"header": [],
-				"body": {
-					"mode": "raw",
-					"raw": "{\n  \"first_name\": \"Chandler\",\n  \"last_name\": \"Bing\",\n  \"email\": \"chandler.bing@example.com\",\n  \"description\": \"Sarcastic, self-deprecating office worker with a sharp sense of humor, known for cracking jokes to deflect awkward situations.\"\n}"
-				},
 				"url": {
-					"raw": "localhost:8888/api/v1/search?q=awkward",
+					"raw": "localhost:8888/api/v1/search?q=NevisWealth",
 					"host": [
 						"localhost"
 					],
@@ -198,7 +170,7 @@
 					"query": [
 						{
 							"key": "q",
-							"value": "awkward"
+							"value": "NevisWealth"
 						}
 					]
 				}
@@ -207,16 +179,9 @@
 		},
 		{
 			"name": "Search \"chandler\"",
-			"protocolProfileBehavior": {
-				"disableBodyPruning": true
-			},
 			"request": {
 				"method": "GET",
 				"header": [],
-				"body": {
-					"mode": "raw",
-					"raw": "{\n  \"first_name\": \"Chandler\",\n  \"last_name\": \"Bing\",\n  \"email\": \"chandler.bing@example.com\",\n  \"description\": \"Sarcastic, self-deprecating office worker with a sharp sense of humor, known for cracking jokes to deflect awkward situations.\"\n}"
-				},
 				"url": {
 					"raw": "localhost:8888/api/v1/search?q=chandler",
 					"host": [
@@ -240,16 +205,9 @@
 		},
 		{
 			"name": "Search \"awkward\"",
-			"protocolProfileBehavior": {
-				"disableBodyPruning": true
-			},
 			"request": {
 				"method": "GET",
 				"header": [],
-				"body": {
-					"mode": "raw",
-					"raw": "{\n  \"first_name\": \"Chandler\",\n  \"last_name\": \"Bing\",\n  \"email\": \"chandler.bing@example.com\",\n  \"description\": \"Sarcastic, self-deprecating office worker with a sharp sense of humor, known for cracking jokes to deflect awkward situations.\"\n}"
-				},
 				"url": {
 					"raw": "localhost:8888/api/v1/search?q=awkward",
 					"host": [
