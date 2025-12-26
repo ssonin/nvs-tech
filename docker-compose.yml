@@ -30,6 +30,25 @@ services:
     networks:
       - nvs-tech-network
 
+  embedding:
+    build:
+      context: ./services/embedding-service
+      dockerfile: Dockerfile
+    container_name: nvs-tech-embedding
+    restart: unless-stopped
+
+    ports:
+      - "127.0.0.1:8000:8000"
+
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+    networks:
+      - nvs-tech-network
+
   app:
     build:
       context: .

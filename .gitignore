@@ -73,6 +73,7 @@ local.properties
 .idea/**/sqldialects.xml
 .idea/**/dynamic.xml
 .idea/**/uiDesigner.xml
+.idea/**/ClojureProjectResolveSettings.xml
 
 # Gradle:
 build/
