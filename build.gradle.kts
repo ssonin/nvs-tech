@@ -39,6 +39,7 @@ dependencies {
   implementation("io.vertx:vertx-launcher-application")
   implementation("io.vertx:vertx-pg-client")
   implementation("io.vertx:vertx-web")
+  implementation("io.vertx:vertx-web-client")
   implementation("org.flywaydb:flyway-core:${flywayVersion}")
   implementation("org.flywaydb:flyway-database-postgresql:${flywayVersion}")
   implementation("org.slf4j:slf4j-api:${slf4jVersion}")

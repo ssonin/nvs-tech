@@ -1,3 +1,5 @@
+CREATE EXTENSION IF NOT EXISTS vector;
+
 CREATE TABLE documents
 (
   id         uuid        PRIMARY KEY,
@@ -7,6 +9,7 @@ CREATE TABLE documents
   client_id  uuid        NOT NULL,
   title      text        NOT NULL,
   content    text        NOT NULL,
+  embedding  vector(384),
   search     tsvector
     GENERATED ALWAYS AS (
       setweight(to_tsvector('english', coalesce(title, '')), 'A') ||

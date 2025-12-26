@@ -33,7 +33,7 @@ services:
   embedding:
     build:
       context: ./services/embedding-service
-      dockerfile: Dockerfile
+      dockerfile: embedding.Dockerfile
     container_name: nvs-tech-embedding
     restart: unless-stopped
 
@@ -56,12 +56,14 @@ services:
     container_name: nvs-tech-app
 
     environment:
+      EMBEDDING_SERVICE_HOST: embedding
+      EMBEDDING_SERVICE_PORT: 8000
+      HTTP_PORT: ${HTTP_PORT:-8888}
       PGHOST: postgres
       PGPORT: 5432
       PGDATABASE: ${PGDATABASE:-nvs_tech}
       PGUSER: ${PGUSER:-nvs_tech}
       PGPASSWORD: ${PGPASSWORD:-nvs_tech}
-      HTTP_PORT: ${HTTP_PORT:-8888}
 
     ports:
       - "127.0.0.1:8888:8888"

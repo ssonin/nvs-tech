@@ -9,7 +9,10 @@ import io.vertx.core.json.JsonObject;
 import io.vertx.pgclient.PgBuilder;
 import io.vertx.pgclient.PgConnectOptions;
 import io.vertx.pgclient.PgException;
-import io.vertx.sqlclient.*;
+import io.vertx.sqlclient.Pool;
+import io.vertx.sqlclient.PoolOptions;
+import io.vertx.sqlclient.Row;
+import io.vertx.sqlclient.Tuple;
 import org.slf4j.Logger;
 
 import java.util.Comparator;
@@ -80,16 +83,20 @@ public final class RepositoryVerticle extends VerticleBase {
 
   private void createDocument(Message<JsonObject> msg) {
     final var data = msg.body();
-    final var values = Tuple.of(
-      randomUUID(),
-      data.getString("client_id"),
-      data.getString("title"),
-      data.getString("content"));
-    pool
-      .withConnection(conn ->
-        conn.preparedQuery(insertDocument())
-          .execute(values)
-          .map(rows -> documentFromRow(rows.iterator().next())))
+    fetchEmbeddings(data.getString("content"))
+      .compose(embeddings -> {
+        final var values = Tuple.of(
+          randomUUID(),
+          data.getString("client_id"),
+          data.getString("title"),
+          data.getString("content"),
+          embeddings.getJsonArray(0).toString());
+        return pool
+          .withConnection(conn ->
+            conn.preparedQuery(insertDocument())
+              .execute(values)
+              .map(rows -> documentFromRow(rows.iterator().next())));
+      })
       .onSuccess(msg::reply)
       .onFailure(handleError(msg));
   }
@@ -140,6 +147,14 @@ public final class RepositoryVerticle extends VerticleBase {
             }
             return result;
           }));
+  }
+
+  private Future<JsonArray> fetchEmbeddings(String... texts) {
+    final var message = new JsonObject()
+      .put("texts", JsonArray.of(texts));
+    return vertx.eventBus()
+      .<JsonArray>request("embeddings.get", message)
+      .map(Message::body);
   }
 
   private JsonObject clientFromRow(Row row) {
