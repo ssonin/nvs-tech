@@ -45,27 +45,26 @@ interface SqlQueries {
 
   static String searchDocuments() {
     return """
-    WITH fts_results AS (
-      SELECT id, ts_rank(search, plainto_tsquery('english', $1)) AS rank
-      FROM documents
-      WHERE search @@ plainto_tsquery('english', $1)
-    ),
-    vector_results AS (
-      SELECT id, 1 - (embedding <=> $2::vector) AS rank
-      FROM documents
-      WHERE embedding IS NOT NULL
-      ORDER BY rank
-      LIMIT 20
-    ),
-    combined AS (
-      SELECT id, MAX(rank) AS rank
-      FROM (
-        SELECT * FROM fts_results
-        UNION ALL
-        SELECT * FROM vector_results
-      ) sub
-      GROUP BY id
-    )
+      WITH fts_results AS (
+        SELECT id, ROW_NUMBER() OVER (ORDER BY ts_rank(search, plainto_tsquery('english', $1)) DESC) AS rank_pos
+        FROM documents
+        WHERE search @@ plainto_tsquery('english', $1)
+        LIMIT 20
+      ),
+      vector_results AS (
+        SELECT id, ROW_NUMBER() OVER (ORDER BY embedding <=> $2::vector) AS rank_pos
+        FROM documents
+        WHERE embedding IS NOT NULL
+        ORDER BY embedding <=> $2::vector
+        LIMIT 20
+      ),
+      combined AS (
+        SELECT
+          id,
+          COALESCE(1.0 / (60 + fts.rank_pos), 0) + COALESCE(1.0 / (60 + vec.rank_pos), 0) AS rrf_score
+        FROM fts_results fts
+        FULL OUTER JOIN vector_results vec USING (id)
+      )
     SELECT
       'document' AS type,
       d.id,
@@ -73,10 +72,10 @@ interface SqlQueries {
       d.client_id,
       d.title,
       d.content,
-      c.rank
+      c.rrf_score as rank
     FROM combined c
     JOIN documents d ON d.id = c.id
-    ORDER BY c.rank DESC
+    ORDER BY c.rrf_score DESC
     LIMIT 20;
     """;
   }
