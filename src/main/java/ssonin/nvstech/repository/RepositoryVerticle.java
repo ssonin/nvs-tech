@@ -102,12 +102,12 @@ public final class RepositoryVerticle extends VerticleBase {
   }
 
   private void search(Message<JsonObject> msg) {
-    final var query = msg.body().getString("query");
-    final var values = Tuple.of(query);
     final Comparator<JsonObject> byRank = comparingDouble(it -> it.getDouble("rank"));
-    Future.all(
-        searchClients(values),
-        searchDocuments(values))
+    final var query = msg.body().getString("query");
+    fetchEmbeddings(query)
+      .compose(embeddings -> Future.all(
+        searchClients(query),
+        searchDocuments(query, embeddings)))
       .map(composite -> {
         final JsonArray clients = composite.resultAt(0);
         final JsonArray documents = composite.resultAt(1);
@@ -121,7 +121,8 @@ public final class RepositoryVerticle extends VerticleBase {
       .onFailure(handleError(msg));
   }
 
-  private Future<JsonArray> searchClients(Tuple values) {
+  private Future<JsonArray> searchClients(String query) {
+    final var values = Tuple.of(query);
     return pool
       .withConnection(conn ->
         conn.preparedQuery(SqlQueries.searchClients())
@@ -135,7 +136,8 @@ public final class RepositoryVerticle extends VerticleBase {
           }));
   }
 
-  private Future<JsonArray> searchDocuments(Tuple values) {
+  private Future<JsonArray> searchDocuments(String query, JsonArray embeddings) {
+    final var values = Tuple.of(query, embeddings.getJsonArray(0).toString());
     return pool
       .withConnection(conn ->
         conn.preparedQuery(SqlQueries.searchDocuments())

@@ -45,17 +45,39 @@ interface SqlQueries {
 
   static String searchDocuments() {
     return """
-      SELECT
-        'document' AS type,
-        id,
-        created_at,
-        client_id,
-        title,
-        content,
-        ts_rank(search, query) AS rank
-      FROM documents, plainto_tsquery('english', $1) query
-      WHERE search @@ query
-      ORDER BY rank DESC;
+    WITH fts_results AS (
+      SELECT id, ts_rank(search, plainto_tsquery('english', $1)) AS rank
+      FROM documents
+      WHERE search @@ plainto_tsquery('english', $1)
+    ),
+    vector_results AS (
+      SELECT id, 1 - (embedding <=> $2::vector) AS rank
+      FROM documents
+      WHERE embedding IS NOT NULL
+      ORDER BY rank
+      LIMIT 20
+    ),
+    combined AS (
+      SELECT id, MAX(rank) AS rank
+      FROM (
+        SELECT * FROM fts_results
+        UNION ALL
+        SELECT * FROM vector_results
+      ) sub
+      GROUP BY id
+    )
+    SELECT
+      'document' AS type,
+      d.id,
+      d.created_at,
+      d.client_id,
+      d.title,
+      d.content,
+      c.rank
+    FROM combined c
+    JOIN documents d ON d.id = c.id
+    ORDER BY c.rank DESC
+    LIMIT 20;
     """;
   }
 }

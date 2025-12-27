@@ -22,3 +22,6 @@ CREATE INDEX documents_client_id_idx
 
 CREATE INDEX documents_search_idx
   ON documents USING GIN (search);
+
+CREATE INDEX documents_embedding_idx
+  ON documents USING hnsw (embedding vector_cosine_ops);
