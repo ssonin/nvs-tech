@@ -23,6 +23,7 @@ val slf4jVersion = "2.0.17"
 val systemStubsVersion = "2.1.7"
 val testcontainersVersion = "1.21.4"
 val vertxVersion = "5.0.6"
+val wiremockVersion = "3.13.1"
 
 val mainVerticleName = "ssonin.nvstech.App"
 val launcherClassName = "io.vertx.launcher.application.VertxApplication"
@@ -54,6 +55,7 @@ dependencies {
   testImplementation("org.testcontainers:testcontainers")
   testImplementation("org.testcontainers:junit-jupiter")
   testImplementation("org.testcontainers:postgresql")
+  testImplementation("org.wiremock:wiremock:${wiremockVersion}")
   testImplementation("uk.org.webcompere:system-stubs-jupiter:${systemStubsVersion}")
 
   testRuntimeOnly("org.junit.platform:junit-platform-launcher")
