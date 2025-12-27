@@ -1,8 +1,6 @@
 services:
   postgres:
-    build:
-      context: .
-      dockerfile: postgres.Dockerfile
+    image: pgvector/pgvector:pg16
     container_name: nvs-tech-postgres
     restart: unless-stopped
 

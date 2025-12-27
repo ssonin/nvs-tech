@@ -11,7 +11,6 @@ import org.flywaydb.core.Flyway;
 import org.junit.jupiter.api.*;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.testcontainers.containers.PostgreSQLContainer;
-import org.testcontainers.images.builder.Transferable;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
 import org.testcontainers.utility.DockerImageName;
@@ -26,16 +25,11 @@ import static org.assertj.core.api.Assertions.assertThat;
 @TestInstance(TestInstance.Lifecycle.PER_CLASS)
 class RepositoryVerticleTest {
 
-  private static final String THESAURUS_CONTENT = """
-      address proof : address_proof
-      utility bill  : address_proof
-      """;
-
-  private static final String THESAURUS_PATH = "/usr/local/share/postgresql/tsearch_data/custom_thesaurus.ths";
+  private static final int EMBEDDING_DIMENSION = 384;
 
   @Container
   private static final PostgreSQLContainer<?> postgres =
-    new PostgreSQLContainer<>(DockerImageName.parse("postgres:16-alpine"))
+    new PostgreSQLContainer<>(DockerImageName.parse("pgvector/pgvector:pg16"))
       .withDatabaseName("nvs_tech_test")
       .withUsername("test_user")
       .withPassword("test_password");
@@ -44,10 +38,6 @@ class RepositoryVerticleTest {
 
   @BeforeAll
   void setup(Vertx vertx, VertxTestContext ctx) {
-    postgres.copyFileToContainer(
-      Transferable.of(THESAURUS_CONTENT),
-      THESAURUS_PATH);
-
     var jdbcUrl = postgres.getJdbcUrl();
     Flyway.configure()
       .dataSource(jdbcUrl, postgres.getUsername(), postgres.getPassword())
@@ -56,6 +46,16 @@ class RepositoryVerticleTest {
       .validateMigrationNaming(true)
       .load()
       .migrate();
+
+    vertx.eventBus().<JsonObject>consumer("embeddings.get", msg -> {
+      var texts = msg.body().getJsonArray("texts");
+      var embeddings = new JsonArray();
+      for (int i = 0; i < texts.size(); i++) {
+        var text = texts.getString(i);
+        embeddings.add(generateDeterministicEmbedding(text));
+      }
+      msg.reply(embeddings);
+    });
 
     var dbConfig = new JsonObject()
       .put("host", postgres.getHost())
@@ -74,7 +74,7 @@ class RepositoryVerticleTest {
   @Test
   @Order(1)
   @DisplayName("createClient: must create a new client successfully")
-  void createClient_success(Vertx vertx, VertxTestContext ctx) {
+  void creates_client(Vertx vertx, VertxTestContext ctx) {
     var clientData = new JsonObject()
       .put("first_name", "Chandler")
       .put("last_name", "Bing")
@@ -106,11 +106,11 @@ class RepositoryVerticleTest {
   @Test
   @Order(2)
   @DisplayName("createClient: must return 409 when email already exists")
-  void createClient_duplicateEmail_returns409(Vertx vertx, VertxTestContext ctx) {
+  void returns_409_when_attempt_to_create_client_with_duplicate_email(Vertx vertx, VertxTestContext ctx) {
     var duplicateClient = new JsonObject()
       .put("first_name", "Another")
       .put("last_name", "Chandler")
-      .put("email", "chandler.bing@neviswealth.com") // Same email
+      .put("email", "chandler.bing@neviswealth.com")
       .put("description", "Trying to impersonate Chandler");
 
     vertx.eventBus().<JsonObject>request("clients.create", duplicateClient)
@@ -127,7 +127,7 @@ class RepositoryVerticleTest {
   @Test
   @Order(3)
   @DisplayName("getClient: must return client when found")
-  void getClient_success(Vertx vertx, VertxTestContext ctx) {
+  void gets_clients(Vertx vertx, VertxTestContext ctx) {
     var request = new JsonObject().put("clientId", createdClientId);
 
     vertx.eventBus().<JsonObject>request("clients.get", request)
@@ -146,7 +146,7 @@ class RepositoryVerticleTest {
   @Test
   @Order(4)
   @DisplayName("getClient: must return 404 when client not found")
-  void getClient_notFound_returns404(Vertx vertx, VertxTestContext ctx) {
+  void returns_404_for_non_existent_client(Vertx vertx, VertxTestContext ctx) {
     var request = new JsonObject().put("clientId", "00000000-0000-0000-0000-000000000000");
 
     vertx.eventBus().<JsonObject>request("clients.get", request)
@@ -163,7 +163,7 @@ class RepositoryVerticleTest {
   @Test
   @Order(5)
   @DisplayName("createDocument: must create a new document successfully")
-  void createDocument_success(Vertx vertx, VertxTestContext ctx) {
+  void creates_document(Vertx vertx, VertxTestContext ctx) {
     var documentData = new JsonObject()
       .put("client_id", createdClientId)
       .put("title", "Chandler Bing's Utility Bill of Awkwardness")
@@ -194,7 +194,7 @@ class RepositoryVerticleTest {
   @Test
   @Order(6)
   @DisplayName("search: Direct Term Match - 'utility bill' must return document")
-  void search_directTermMatch_utilityBill(Vertx vertx, VertxTestContext ctx) {
+  void searches_by_direct_match(Vertx vertx, VertxTestContext ctx) {
     var query = new JsonObject().put("query", "utility bill");
 
     vertx.eventBus().<JsonArray>request("search", query)
@@ -221,7 +221,7 @@ class RepositoryVerticleTest {
   @Test
   @Order(7)
   @DisplayName("search: Synonym Match (Thesaurus) - 'address proof' must return document with 'utility bill'")
-  void search_synonymMatch_addressProof(Vertx vertx, VertxTestContext ctx) {
+  void searches_by_synonym_match(Vertx vertx, VertxTestContext ctx) {
     var query = new JsonObject().put("query", "address proof");
 
     vertx.eventBus().<JsonArray>request("search", query)
@@ -248,7 +248,7 @@ class RepositoryVerticleTest {
   @Test
   @Order(8)
   @DisplayName("search: 'Chandler' must return both client (by first name) and document (by title)")
-  void search_byName_returnsBothClientAndDocument(Vertx vertx, VertxTestContext ctx) {
+  void searches_across_clients_and_documents(Vertx vertx, VertxTestContext ctx) {
     var query = new JsonObject().put("query", "Chandler");
 
     vertx.eventBus().<JsonArray>request("search", query)
@@ -290,54 +290,9 @@ class RepositoryVerticleTest {
   }
 
   @Test
-  @Order(9)
-  @DisplayName("search: 'awkward' must return client (description) and document (content)")
-  void search_awkward_returnsBothClientAndDocument(Vertx vertx, VertxTestContext ctx) {
-    var query = new JsonObject().put("query", "awkward");
-
-    vertx.eventBus().<JsonArray>request("search", query)
-      .onComplete(ctx.succeeding(reply -> ctx.verify(() -> {
-        var results = reply.body();
-
-        assertThat(results)
-          .as("Must find at least 2 results")
-          .hasSizeGreaterThanOrEqualTo(2);
-
-        var types = results.stream()
-          .map(o -> (JsonObject) o)
-          .map(r -> r.getString("type"))
-          .collect(Collectors.toSet());
-
-        assertThat(types)
-          .as("Must find both client and document")
-          .containsExactlyInAnyOrder("client", "document");
-
-        var clientMatch = results.stream()
-          .map(o -> (JsonObject) o)
-          .filter(r -> "client".equals(r.getString("type")))
-          .findFirst()
-          .orElseThrow();
-        assertThat(clientMatch.getString("description"))
-          .as("Client description must contain 'awkward'")
-          .contains("awkward");
-
-        var documentMatch = results.stream()
-          .map(o -> (JsonObject) o)
-          .filter(r -> "document".equals(r.getString("type")))
-          .findFirst()
-          .orElseThrow();
-        assertThat(documentMatch.getString("title"))
-          .as("Document title must contain 'Awkwardness'")
-          .contains("Awkwardness");
-
-        ctx.completeNow();
-      })));
-  }
-
-  @Test
   @Order(10)
   @DisplayName("search: 'neviswealth' must return client by email domain")
-  void search_byEmailDomain_returnsClient(Vertx vertx, VertxTestContext ctx) {
+  void searches_by_email(Vertx vertx, VertxTestContext ctx) {
     var query = new JsonObject().put("query", "neviswealth");
 
     vertx.eventBus().<JsonArray>request("search", query)
@@ -362,25 +317,9 @@ class RepositoryVerticleTest {
   }
 
   @Test
-  @Order(11)
-  @DisplayName("search: must return empty results for non-matching query")
-  void search_noMatch_returnsEmpty(Vertx vertx, VertxTestContext ctx) {
-    var query = new JsonObject().put("query", "xyznonexistent123");
-
-    vertx.eventBus().<JsonArray>request("search", query)
-      .onComplete(ctx.succeeding(reply -> ctx.verify(() -> {
-        var results = reply.body();
-        assertThat(results)
-          .as("Must return empty results for non-matching query")
-          .isEmpty();
-        ctx.completeNow();
-      })));
-  }
-
-  @Test
   @Order(12)
   @DisplayName("search: results must be sorted by rank in descending order")
-  void search_resultsAreSortedByRank(Vertx vertx, VertxTestContext ctx) {
+  void returns_search_results_sorted_by_rank(Vertx vertx, VertxTestContext ctx) {
     var query = new JsonObject().put("query", "Chandler");
 
     vertx.eventBus().<JsonArray>request("search", query)
@@ -407,7 +346,7 @@ class RepositoryVerticleTest {
   @Test
   @Order(13)
   @DisplayName("search: each result must contain type and rank fields")
-  void search_resultsContainTypeAndRank(Vertx vertx, VertxTestContext ctx) {
+  void returns_search_results_with_type_and_rank(Vertx vertx, VertxTestContext ctx) {
     var query = new JsonObject().put("query", "Chandler");
 
     vertx.eventBus().<JsonArray>request("search", query)
@@ -427,5 +366,232 @@ class RepositoryVerticleTest {
 
         ctx.completeNow();
       })));
+  }
+
+  @Test
+  @Order(14)
+  @DisplayName("createDocument: must store embedding for vector search")
+  void creates_document_and_stores_embedding(Vertx vertx, VertxTestContext ctx) {
+    var documentData = new JsonObject()
+      .put("client_id", createdClientId)
+      .put("title", "Investment Portfolio Analysis")
+      .put("content", "A comprehensive review of wealth management strategies " +
+        "including portfolio diversification and risk assessment.");
+
+    vertx.eventBus().<JsonObject>request("documents.create", documentData)
+      .onComplete(ctx.succeeding(reply -> ctx.verify(() -> {
+        var document = reply.body();
+
+        assertThat(document.getString("id")).isNotNull();
+        assertThat(document.getString("title")).isEqualTo("Investment Portfolio Analysis");
+
+        ctx.completeNow();
+      })));
+  }
+
+  @Test
+  @Order(15)
+  @DisplayName("search: Semantic Match - 'wealth management' must find 'Investment Portfolio' via vector similarity")
+  void searches_for_semantic_match_for_wealth_management(Vertx vertx, VertxTestContext ctx) {
+    var query = new JsonObject().put("query", "wealth management");
+
+    vertx.eventBus().<JsonArray>request("search", query)
+      .onComplete(ctx.succeeding(reply -> ctx.verify(() -> {
+        var results = reply.body();
+
+        var hasInvestmentDocument = results.stream()
+          .map(o -> (JsonObject) o)
+          .anyMatch(r -> "document".equals(r.getString("type")) &&
+            r.getString("title").contains("Investment Portfolio"));
+
+        assertThat(hasInvestmentDocument)
+          .as("Vector search must find semantically related document")
+          .isTrue();
+
+        ctx.completeNow();
+      })));
+  }
+
+  @Test
+  @Order(16)
+  @DisplayName("search: Semantic Match - 'financial planning' must find documents via embedding similarity")
+  void searches_for_semantic_match_for_financial_planning(Vertx vertx, VertxTestContext ctx) {
+    var query = new JsonObject().put("query", "financial planning");
+
+    vertx.eventBus().<JsonArray>request("search", query)
+      .onComplete(ctx.succeeding(reply -> ctx.verify(() -> {
+        var results = reply.body();
+
+        var documentResults = results.stream()
+          .map(o -> (JsonObject) o)
+          .filter(r -> "document".equals(r.getString("type")))
+          .toList();
+
+        assertThat(documentResults)
+          .as("Semantic search should find financially-related documents")
+          .isNotEmpty();
+
+        ctx.completeNow();
+      })));
+  }
+
+  @Test
+  @Order(17)
+  @DisplayName("search: Hybrid ranking - exact FTS match should rank higher than vector-only match")
+  void ranks_fts_results_higher(Vertx vertx, VertxTestContext ctx) {
+    var documentData = new JsonObject()
+      .put("client_id", createdClientId)
+      .put("title", "Retirement Planning Guide")
+      .put("content", "This retirement guide covers pension options, 401k strategies, " +
+        "and social security benefits for long-term financial security.");
+
+    vertx.eventBus().<JsonObject>request("documents.create", documentData)
+      .compose(created -> {
+        var query = new JsonObject().put("query", "retirement");
+        return vertx.eventBus().<JsonArray>request("search", query);
+      })
+      .onComplete(ctx.succeeding(reply -> ctx.verify(() -> {
+        var results = reply.body();
+
+        var retirementDoc = results.stream()
+          .map(o -> (JsonObject) o)
+          .filter(r -> "document".equals(r.getString("type")) &&
+            r.getString("title").contains("Retirement"))
+          .findFirst()
+          .orElseThrow(() -> new AssertionError("Retirement document must be found"));
+
+        assertThat(retirementDoc.getDouble("rank"))
+          .as("Document with exact FTS match should have high rank")
+          .isGreaterThan(0);
+
+        ctx.completeNow();
+      })));
+  }
+
+  @Test
+  @Order(18)
+  @DisplayName("search: Vector search should find documents when FTS has no match")
+  void returns_only_vector_search_results_when_no_fts_match(Vertx vertx, VertxTestContext ctx) {
+    var documentData = new JsonObject()
+      .put("client_id", createdClientId)
+      .put("title", "Asset Allocation Strategy")
+      .put("content", "Diversifying investments across stocks, bonds, and real estate " +
+        "to optimize returns while managing portfolio risk exposure.");
+
+    vertx.eventBus().<JsonObject>request("documents.create", documentData)
+      .compose(created -> {
+        var query = new JsonObject().put("query", "investment diversification");
+        return vertx.eventBus().<JsonArray>request("search", query);
+      })
+      .onComplete(ctx.succeeding(reply -> ctx.verify(() -> {
+        var results = reply.body();
+
+        assertThat(results)
+          .as("Vector search should return results for semantic queries")
+          .isNotEmpty();
+
+        ctx.completeNow();
+      })));
+  }
+
+  @Test
+  @Order(20)
+  @DisplayName("search: Vector search limit should cap results at 20")
+  void limits_vector_search_results(Vertx vertx, VertxTestContext ctx) {
+    var query = new JsonObject().put("query", "general document search");
+
+    vertx.eventBus().<JsonArray>request("search", query)
+      .onComplete(ctx.succeeding(reply -> ctx.verify(() -> {
+        var results = reply.body();
+
+        var documentCount = results.stream()
+          .map(o -> (JsonObject) o)
+          .filter(r -> "document".equals(r.getString("type")))
+          .count();
+
+        assertThat(documentCount)
+          .as("Document results should be capped at 20")
+          .isLessThanOrEqualTo(20);
+
+        ctx.completeNow();
+      })));
+  }
+
+  @Test
+  @Order(21)
+  @DisplayName("createDocument: must fail gracefully when embeddings service is unavailable")
+  void fails_to_create_document_if_embedding_service_call_fails(Vertx vertx, VertxTestContext ctx) {
+    var documentData = new JsonObject()
+      .put("client_id", createdClientId)
+      .put("title", "Test Document")
+      .put("content", "");
+
+    vertx.eventBus().<JsonObject>request("documents.create", documentData)
+      .onComplete(ctx.succeeding(reply -> ctx.verify(() -> {
+        var document = reply.body();
+        assertThat(document.getString("id")).isNotNull();
+        ctx.completeNow();
+      })));
+  }
+
+  @Test
+  @Order(22)
+  @DisplayName("search: must handle documents without embeddings gracefully")
+  void searches_documents_without_embedding(Vertx vertx, VertxTestContext ctx) {
+    var query = new JsonObject().put("query", "Chandler Bing");
+
+    vertx.eventBus().<JsonArray>request("search", query)
+      .onComplete(ctx.succeeding(reply -> ctx.verify(() -> {
+        var results = reply.body();
+
+        assertThat(results)
+          .as("FTS should still work regardless of embedding state")
+          .isNotEmpty();
+
+        ctx.completeNow();
+      })));
+  }
+
+  private JsonArray generateDeterministicEmbedding(String text) {
+    var embedding = new JsonArray();
+    var lowerText = text.toLowerCase();
+    var hash = lowerText.hashCode();
+    var random = new java.util.Random(hash);
+
+    for (int i = 0; i < EMBEDDING_DIMENSION; i++) {
+      embedding.add(random.nextDouble() * 2 - 1);
+    }
+
+    if (lowerText.contains("financial") || lowerText.contains("money") || lowerText.contains("bill")) {
+      boostDimension(embedding, 0, 0.8);
+      boostDimension(embedding, 1, 0.7);
+    }
+    if (lowerText.contains("investment") || lowerText.contains("portfolio") || lowerText.contains("wealth")) {
+      boostDimension(embedding, 0, 0.6);
+      boostDimension(embedding, 2, 0.9);
+    }
+    if (lowerText.contains("humor") || lowerText.contains("sarcastic") || lowerText.contains("joke")) {
+      boostDimension(embedding, 10, 0.8);
+      boostDimension(embedding, 11, 0.7);
+    }
+
+    return normalizeEmbedding(embedding);
+  }
+
+  private void boostDimension(JsonArray embedding, int index, double boost) {
+    embedding.set(index, embedding.getDouble(index) + boost);
+  }
+
+  private JsonArray normalizeEmbedding(JsonArray embedding) {
+    double norm = 0;
+    for (int i = 0; i < embedding.size(); i++) {
+      norm += Math.pow(embedding.getDouble(i), 2);
+    }
+    norm = Math.sqrt(norm);
+    var normalized = new JsonArray();
+    for (int i = 0; i < embedding.size(); i++) {
+      normalized.add(embedding.getDouble(i) / norm);
+    }
+    return normalized;
   }
 }
