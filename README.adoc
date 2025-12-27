@@ -4,35 +4,37 @@
 
 image:https://img.shields.io/badge/vert.x-5.0.6-purple.svg[link="https://vertx.io"]
 image:https://img.shields.io/badge/java-21-blue.svg[link="https://openjdk.org/"]
+image:https://img.shields.io/badge/python-3.11-blue.svg[link="https://www.python.org/"]
 image:https://img.shields.io/badge/postgresql-16-blue.svg[link="https://www.postgresql.org/"]
 
-A REST API for managing clients and documents with advanced full-text search capabilities powered by PostgreSQL.
+A REST API for managing clients and documents with advanced hybrid search capabilities powered by PostgreSQL full-text search and vector similarity.
 
 toc::[]
 
 == Overview
 
-This application provides a searchable repository of clients and their associated documents. The search functionality leverages PostgreSQL's full-text search with custom thesaurus support for synonym matching.
+This application provides a searchable repository of clients and their associated documents. The search functionality combines PostgreSQL's full-text search with semantic vector search using pgvector, enabling both keyword matching and conceptual similarity searches.
 
 === Key Features
 
 * *Client Management*: Create and retrieve client records with contact information
 * *Document Management*: Attach documents to clients with searchable content
-* *Advanced Search*:
-** Find clients by name, email, or description
-** Search documents with synonym support (e.g., "address proof" matches "utility bill")
-** Unified search across both clients and documents with relevance ranking
-* *Full-Text Search*: PostgreSQL-powered with custom thesaurus for domain-specific synonyms
+* *Hybrid Search*:
+** Full-text search for direct keyword matches with relevance ranking
+** Semantic vector search for conceptually similar content
+** Reciprocal Rank Fusion (RRF) to combine and rank results from both approaches
+** Unified search across both clients and documents
 
 === Technology Stack
 
 * *Runtime*: Java 21
 * *Framework*: Vert.x 5.0.6 (Web, Native PostgreSQL Client)
-* *Database*: PostgreSQL 16 with full-text search
+* *Database*: PostgreSQL 16 with full-text search and pgvector extension
+* *Embeddings*: Python 3.11 microservice with sentence-transformers (all-MiniLM-L6-v2)
 * *Migrations*: Flyway 11.7.2
 * *Build*: Gradle 8.11 with Shadow plugin
 * *Containerisation*: Docker with multi-stage builds
-* *Testing*: JUnit 5 with Testcontainers (for integration tests)
+* *Testing*: JUnit 5 with Testcontainers and WireMock
 
 ==== Why Vert.x + PostgreSQL?
 
@@ -72,7 +74,8 @@ docker compose up --build
 +
 This will:
 
-* Build and start PostgreSQL 16 with custom thesaurus configuration
+* Build and start PostgreSQL 16 with pgvector extension
+* Build and start the embedding service (downloads the ML model on first run)
 * Apply database migrations automatically via Flyway
 * Build and start the application on port 8888
 
@@ -136,6 +139,14 @@ Environment variables (with defaults):
 |`HTTP_PORT`
 |`8888`
 |HTTP server port
+
+|`EMBEDDING_SERVICE_HOST`
+|`embedding`
+|Embedding service host
+
+|`EMBEDDING_SERVICE_PORT`
+|`8000`
+|Embedding service port
 |===
 
 Override in `docker-compose.yml` or create a `.env` file.
@@ -247,7 +258,7 @@ Results are sorted by relevance (rank) in descending order.
 
 Using the example client and document from the API documentation above, here are various search scenarios demonstrating the capabilities:
 
-=== Direct Term Match
+=== Direct Term Match (Full-Text Search)
 
 Search for documents containing "utility bill":
 
@@ -256,18 +267,18 @@ Search for documents containing "utility bill":
 curl "http://localhost:8888/api/v1/search?q=utility+bill"
 ----
 
-Returns Chandler's document as a direct match on "utility bill" in the content.
+Returns Chandler's document as a direct match on "utility bill" in the content via full-text search.
 
-=== Synonym Match (Thesaurus)
+=== Semantic Search (Vector Similarity)
 
-Search for "address proof":
+Search for "energy costs" or "monthly expenses":
 
 [source,bash]
 ----
 curl "http://localhost:8888/api/v1/search?q=address+proof"
 ----
 
-Returns Chandler's document even though it doesn't contain "address proof" - the custom thesaurus maps this to "utility bill".
+Returns Chandler's utility bill document even though it doesn't contain "address proof" - the vector search finds it based on semantic similarity to the document's content.
 
 === Name-Based Search
 
@@ -330,10 +341,10 @@ curl -X POST "http://localhost:8888/api/v1/clients/${CLIENT_ID}/documents" \
     "content": "This official-looking utility bill details the excessive energy I'\''ve wasted trying to explain my job to my parents and the high emotional charges from every failed relationship since Janice. It also includes a surprise late fee for that one time I accidentally proposed, because apparently sarcasm doesn'\''t show up on the meter. Could this BE any more expensive?"
   }'
 
-# 3. Search by direct term
+# 3. Search by direct term (full-text search)
 curl "http://localhost:8888/api/v1/search?q=utility+bill"
 
-# 4. Search by synonym
+# 4. Search by semantic similarity (vector search)
 curl "http://localhost:8888/api/v1/search?q=address+proof"
 
 # 5. Search by name
@@ -361,19 +372,111 @@ The collection includes:
 
 == Architecture & Design Decisions
 
-=== Full-Text Search Implementation
+=== Hybrid Search Implementation
 
-The application uses PostgreSQL's native full-text search capabilities with several optimisations:
+The application combines two complementary search approaches to provide comprehensive search capabilities:
+
+==== Full-Text Search (FTS)
+
+PostgreSQL's native full-text search handles keyword-based queries with:
+
+* *Stemming*: Matches word variations (e.g., "running" matches "run")
+* *Stop word removal*: Ignores common words like "the", "a", "is"
+* *Relevance ranking*: Uses `ts_rank` to score matches by importance
+
+==== Vector Search (Semantic Similarity)
+
+pgvector extension enables semantic search using embeddings:
+
+* *Model*: all-MiniLM-L6-v2 (384-dimensional embeddings)
+* *Similarity metric*: Cosine similarity via `++<=>++` operator
+* *Indexing*: HNSW (Hierarchical Navigable Small World) for fast approximate nearest-neighbor search
+
+==== Reciprocal Rank Fusion (RRF)
+
+Results from both search methods are combined using RRF, which:
+
+* Merges ranked lists without requiring score normalisation
+* Balances contributions from both FTS and vector search
+* Uses the formula: `1 / (k + rank_position)` where k=60 is a smoothing constant
+
+[source,sql]
+----
+WITH fts_results AS (
+  SELECT id, ROW_NUMBER() OVER (ORDER BY ts_rank(...) DESC) AS rank_pos
+  FROM documents WHERE search @@ plainto_tsquery('english', $1)
+  LIMIT 20
+),
+vector_results AS (
+  SELECT id, ROW_NUMBER() OVER (ORDER BY embedding <=> $2::vector) AS rank_pos
+  FROM documents WHERE embedding IS NOT NULL
+  ORDER BY embedding <=> $2::vector
+  LIMIT 20
+),
+combined AS (
+  SELECT id,
+    COALESCE(1.0 / (60 + fts.rank_pos), 0) +
+    COALESCE(1.0 / (60 + vec.rank_pos), 0) AS rrf_score
+  FROM fts_results fts
+  FULL OUTER JOIN vector_results vec USING (id)
+)
+SELECT ... FROM combined ORDER BY rrf_score DESC;
+----
+
+=== Vector Search & Embeddings
+
+==== Embedding Service
+
+A lightweight Python microservice generates embeddings:
+
+* *Framework*: FastAPI with uvicorn
+* *Model*: sentence-transformers/all-MiniLM-L6-v2
+* *Output*: 384-dimensional float vectors
+* *Endpoint*: `POST /embeddings` accepts batch text input
+
+[source,python]
+----
+model = SentenceTransformer("all-MiniLM-L6-v2")
+
+@app.post("/embeddings")
+def get_embeddings(request: EmbeddingRequest):
+    embeddings = model.encode(request.texts)
+    return EmbeddingResponse(embeddings=embeddings.tolist())
+----
+
+==== Embedding Storage
+
+Document embeddings are stored in PostgreSQL using pgvector:
+
+[source,sql]
+----
+embedding vector(384)
+----
+
+Embeddings are generated when documents are created and stored alongside the document content.
+
+==== HNSW Index
+
+For efficient similarity search, an HNSW index is created on the embedding column:
+
+[source,sql]
+----
+CREATE INDEX documents_embedding_idx
+  ON documents USING hnsw (embedding vector_cosine_ops);
+----
+
+HNSW provides:
+
+* *Fast queries*: Logarithmic time complexity for nearest-neighbor search
+* *High recall*: Typically >95% accuracy compared to exact search
+* *Memory efficiency*: Graph-based structure with tuneable parameters
+
+=== Full-Text Search Configuration
 
 ==== Text Search Vectors
 
-Pre-computed `tsvector` columns are generated automatically using PostgreSQL's `GENERATED ALWAYS AS` syntax. This provides:
+Pre-computed `tsvector` columns are generated automatically using PostgreSQL's `GENERATED ALWAYS AS` syntax:
 
-* *Zero maintenance overhead*: Vectors update automatically on INSERT
-* *Query performance*: Search operations query pre-computed vectors, not raw text
-* *Weighted ranking*: Different fields receive different importance weights
-
-For clients:
 [source,sql]
 ----
 search tsvector GENERATED ALWAYS AS (
@@ -389,6 +492,7 @@ Weight priorities: `A` (name) > `B` (email) > `C` (description)
 ==== Email Tokenisation
 
 Email addresses are tokenised by replacing special characters with spaces:
+
 [source,sql]
 ----
 regexp_replace(email, '[@._+\-]+', ' ', 'g')
@@ -396,87 +500,63 @@ regexp_replace(email, '[@._+\-]+', ' ', 'g')
 
 This allows searching by domain (e.g., "NevisWealth") or username components.
 
-==== Custom Thesaurus
-
-A domain-specific link:src/main/resources/db/tsearch_data/custom_thesaurus.ths[custom_thesaurus.ths] maps business terminology to synonyms:
-
-[source,text]
-----
-address proof : address_proof
-utility bill  : address_proof
-----
-
-The thesaurus is configured as the first dictionary in the English text search configuration, checked before stemming. This enables synonym expansion while preserving standard language processing.
-
-Configuration (link:src/main/resources/db/migration/V001__configure_text_search.sql[V001++__++configure_text_search.sql]):
-[source,sql]
-----
-CREATE TEXT SEARCH DICTIONARY custom_thesaurus (
-  TEMPLATE = thesaurus,
-  DictFile = 'custom_thesaurus',
-  Dictionary = pg_catalog.simple
-);
-
-ALTER TEXT SEARCH CONFIGURATION english
-  ALTER MAPPING FOR asciiword
-    WITH custom_thesaurus, english_stem;
-----
-
 ==== GIN Indexes
 
 Generalised Inverted Indexes provide fast full-text lookups:
+
 [source,sql]
 ----
 CREATE INDEX clients_search_idx ON clients USING GIN (search);
 CREATE INDEX documents_search_idx ON documents USING GIN (search);
 ----
 
-==== Query Strategy
+=== Query Strategy
 
-The search endpoint:
+The search endpoint executes a hybrid search strategy:
 
-1. Executes parallel queries against both `clients` and `documents` tables
-2. Uses `plainto_tsquery` to parse the search string into a query
-3. Ranks results using `ts_rank` for relevance scoring
-4. Merges and sorts results by rank in the application layer
+1. *Generate query embedding*: The search query is sent to the embedding service
+2. *Parallel execution*: FTS and vector searches run concurrently
+3. *Client search*: Full-text search only (clients don't have embeddings)
+4. *Document search*: Hybrid search with RRF ranking
+5. *Merge results*: Combine client and document results, sorted by rank
 
 [source,java]
 ----
 final Comparator<JsonObject> byRank = comparingDouble(it -> it.getDouble("rank"));
-Future.all(
-  searchClients(values),
-  searchDocuments(values))
-.map(composite -> {
-  final JsonArray clients = composite.resultAt(0);
-  final JsonArray documents = composite.resultAt(1);
-  final var results = Stream.concat(clients.stream(), documents.stream())
-    .map(it -> (JsonObject) it)
-    .sorted(byRank.reversed())
-    .toList();
-  return new JsonArray(results);
-})
+fetchEmbeddings(query)
+  .compose(embeddings -> Future.all(
+    searchClients(query),
+    searchDocuments(query, embeddings)))
+  .map(composite -> {
+    final JsonArray clients = composite.resultAt(0);
+    final JsonArray documents = composite.resultAt(1);
+    return Stream.concat(clients.stream(), documents.stream())
+      .map(it -> (JsonObject) it)
+      .sorted(byRank.reversed())
+      .toList();
+  });
 ----
 
-=== Why PostgreSQL Full-Text Search?
+=== Why Hybrid Search with PostgreSQL?
 
-For this use case, PostgreSQL full-text search provides:
+For this use case, combining FTS and vector search in PostgreSQL provides:
 
+* *Best of both worlds*: Exact keyword matching plus semantic understanding
 * *Excellent performance*: Sub-millisecond queries with proper indexing
-* *Built-in relevance ranking*: `ts_rank` and `ts_rank_cd` algorithms
-* *Powerful synonym support*: Thesaurus and dictionary configuration
-* *No additional infrastructure*: No need for Elasticsearch, Solr, or external services
+* *Built-in relevance ranking*: `ts_rank` for FTS, cosine similarity for vectors
+* *No additional infrastructure*: pgvector eliminates the need for a separate vector database
 * *ACID guarantees*: Data consistency with transactional updates
 * *Simpler deployment*: Single database container vs. multi-component stack
 * *Lower operational overhead*: Fewer moving parts to monitor and maintain
 
 Trade-offs:
 
-* Not suitable for larger datasets (>10M documents)
-* Less sophisticated ranking algorithms than dedicated search engines
+* Not suitable for very large datasets (>10M documents with embeddings)
+* Less sophisticated than dedicated vector databases for pure semantic search
+* Embedding service adds a microservice dependency
 * Limited real-time update capabilities compared to specialised solutions
-* Fewer analysis features (no highlighting, faceting, or advanced analysers)
 
-For a focused demo project with moderate data volumes, PostgreSQL provides the best balance of features, performance, and simplicity.
+For a focused demo project with moderate data volumes, PostgreSQL with pgvector provides the best balance of features, performance, and simplicity.
 
 === Vert.x Architecture
 
@@ -487,6 +567,7 @@ The application follows Vert.x best practices with a verticle-based architecture
 * *App*: Main verticle that orchestrates startup, runs Flyway migrations, and deploys other verticles
 * *ApiVerticle*: HTTP layer handling routing, request/response formatting, and error handling
 * *RepositoryVerticle*: Data access layer managing PostgreSQL interactions
+* *EmbeddingVerticle*: Communicates with the embedding service via HTTP
 
 ==== Event Bus Communication
 
@@ -498,11 +579,15 @@ vertx.eventBus()
   .<JsonObject>request("clients.create", payload)
   .onSuccess(reply -> ...)
   .onFailure(ctx::fail);
+
+vertx.eventBus()
+  .<JsonArray>request("embeddings.get", message)
+  .map(Message::body);
 ----
 
 Benefits:
 
-* *Decoupling*: API and repository layers are independent
+* *Decoupling*: API, repository, and embedding layers are independent
 * *Testability*: Easy to mock event bus for unit tests
 * *Scalability*: Event bus supports clustering (though not needed here)
 
@@ -530,25 +615,28 @@ Advantages over JDBC:
 
 The schema uses several PostgreSQL features:
 
-* *Generated columns*: Automatic tsvector maintenance
+* *Generated columns*: Automatic tsvector maintenance for full-text search
+* *Vector columns*: 384-dimensional embeddings stored via pgvector
+* *HNSW index*: Fast approximate nearest-neighbor search on embeddings
+* *GIN indexes*: Efficient full-text search lookups
 * *Partial unique indexes*: `UNIQUE (lower(email)) WHERE state = 'ACTIVE'`
 * *Soft deletes*: `state` column enables logical deletion (prepared for future use)
 * *Timestamps*: Automatic `created_at` and `updated_at` tracking
 
 See migrations in link:src/main/resources/db/migration/[src/main/resources/db/migration/]:
 
-* link:src/main/resources/db/migration/V001__create_clients_table.sql[V002]: Clients table with search vectors
-* link:src/main/resources/db/migration/V002__create_documents_table.sql[V003]: Documents table with search vectors
+* link:src/main/resources/db/migration/V001__create_clients_table.sql[V001]: Clients table with search vectors
+* link:src/main/resources/db/migration/V002__create_documents_table.sql[V002]: Documents table with search vectors, embeddings, and HNSW index
 
 == Development
 
 === Local Development
 
-1. Start PostgreSQL:
+1. Start PostgreSQL and the embedding service:
 +
 [source,bash]
 ----
-docker compose up --build postgres
+docker compose up --build postgres embedding
 ----
 
 2. Package the application:
@@ -572,7 +660,7 @@ docker compose up --build postgres
 ./gradlew clean test
 ----
 
-Integration tests use Testcontainers to spin up a PostgreSQL instance automatically, ensuring tests run against the actual database with full-text search configured.
+Integration tests use Testcontainers to spin up a PostgreSQL instance automatically and WireMock to mock the embedding service, ensuring tests run against realistic infrastructure without external dependencies.
 
 === Building Fat JAR
 
@@ -592,10 +680,12 @@ The fat JAR will be available at `build/libs/nvs-tech-1.0.0-SNAPSHOT-fat.jar`.
 * *No pagination*: Search results return all matches (acceptable for small datasets)
 * *No authentication*: Endpoints are publicly accessible
 * *Case-insensitive search only*: PostgreSQL text search normalises all input
+* *Client search is FTS-only*: Clients don't have embeddings for semantic search
 
 === Potential Enhancements
 
 * *Document Summarisation*: LLM-based content summarisation using Claude API
+* *Client Embeddings*: Add vector search for clients based on description
 * *Advanced Ranking*: Custom boost factors, phrase matching, proximity scoring
 * *Result Highlighting*: Return matched snippets with search terms highlighted
 * *Faceted Search*: Filter by client, date range, document type
@@ -604,7 +694,7 @@ The fat JAR will be available at `build/libs/nvs-tech-1.0.0-SNAPSHOT-fat.jar`.
 * *Audit Trail*: Track document changes and access patterns
 * *Rate Limiting*: Protect against abuse
 * *Authentication & Authorisation*: JWT-based API security
-* *Expanded Thesaurus*: More comprehensive synonym mappings for financial/legal domains
+* *Embedding Model Upgrade*: Larger models for improved semantic understanding
 
 == Troubleshooting
 
@@ -622,12 +712,20 @@ Ensure PostgreSQL is healthy:
 docker compose ps postgres
 ----
 
+Ensure embedding service is healthy:
+[source,bash]
+----
+docker compose ps embedding
+curl http://localhost:8000/health
+----
+
 === Search returns no results
 
 Verify data exists:
 [source,bash]
 ----
 docker exec -it nvs-tech-postgres psql -U nvs_tech -d nvs_tech -c "SELECT COUNT(*) FROM clients;"
+docker exec -it nvs-tech-postgres psql -U nvs_tech -d nvs_tech -c "SELECT COUNT(*) FROM documents;"
 ----
 
 Check search vector generation:
@@ -636,22 +734,29 @@ Check search vector generation:
 docker exec -it nvs-tech-postgres psql -U nvs_tech -d nvs_tech -c "SELECT id, search FROM clients LIMIT 1;"
 ----
 
-Verify thesaurus is loaded:
+Verify embeddings are stored:
 [source,bash]
 ----
-docker exec -it nvs-tech-postgres psql -U nvs_tech -d nvs_tech -c "SELECT to_tsvector('english', 'address proof');"
-
-docker exec -it nvs-tech-postgres psql -U nvs_tech -d nvs_tech -c "SELECT to_tsvector('english', 'utility bill');"
+docker exec -it nvs-tech-postgres psql -U nvs_tech -d nvs_tech -c "SELECT id, embedding IS NOT NULL as has_embedding FROM documents LIMIT 5;"
 ----
 
-Both commands should return the same token (`'address_proof':1`), confirming the thesaurus correctly maps "utility bill" to "address proof":
-[source,text]
+=== Embedding service issues
+
+Check embedding service logs:
+[source,bash]
 ----
-    to_tsvector
--------------------
- 'address_proof':1
-(1 row)
+docker compose logs embedding
 ----
+
+Test embedding generation directly:
+[source,bash]
+----
+curl -X POST http://localhost:8000/embeddings \
+  -H "Content-Type: application/json" \
+  -d '{"texts": ["test query"]}'
+----
+
+The response should contain a 384-dimensional embedding array.
 
 === Database migration issues
 
@@ -667,6 +772,8 @@ docker compose up --build
 * link:https://vertx.io/docs/[Vert.x Documentation]
 * link:https://www.techempower.com/benchmarks/#section=data-r23&test=fortune[TechEmpower Benchmarks - Vert.x Performance]
 * link:https://www.postgresql.org/docs/16/textsearch.html[PostgreSQL Full-Text Search]
-* link:https://www.postgresql.org/docs/16/textsearch-dictionaries.html[PostgreSQL Text Search Dictionaries]
+* link:https://github.com/pgvector/pgvector[pgvector - Vector Similarity Search for PostgreSQL]
+* link:https://www.sbert.net/[Sentence-Transformers Documentation]
+* link:https://huggingface.co/sentence-transformers/all-MiniLM-L6-v2[all-MiniLM-L6-v2 Model]
 * link:https://swagger.io/specification/[OpenAPI Specification]
 * link:https://flywaydb.org/documentation/[Flyway Documentation]
