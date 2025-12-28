@@ -271,7 +271,7 @@ Returns Chandler's document as a direct match on "utility bill" in the content v
 
 === Semantic Search (Vector Similarity)
 
-Search for "energy costs" or "monthly expenses":
+Search for "address proof":
 
 [source,bash]
 ----
