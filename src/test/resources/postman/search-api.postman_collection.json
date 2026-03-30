@@ -13,7 +13,7 @@
 				"header": [],
 				"body": {
 					"mode": "raw",
-					"raw": "{\n  \"first_name\": \"Chandler\",\n  \"last_name\": \"Bing\",\n  \"email\": \"chandler.bing@neviswealth.com\",\n  \"description\": \"Sarcastic, self-deprecating office worker with a sharp sense of humor, known for cracking jokes to deflect awkward situations.\"\n}",
+					"raw": "{\n  \"first_name\": \"Chandler\",\n  \"last_name\": \"Bing\",\n  \"email\": \"chandler.bing@centralperk.com\",\n  \"description\": \"Sarcastic, self-deprecating office worker with a sharp sense of humor, known for cracking jokes to deflect awkward situations.\"\n}",
 					"options": {
 						"raw": {
 							"language": "json"
@@ -152,12 +152,12 @@
 			"response": []
 		},
 		{
-			"name": "Search \"neviswealth\"",
+			"name": "Search \"centralperk\"",
 			"request": {
 				"method": "GET",
 				"header": [],
 				"url": {
-					"raw": "localhost:8888/api/v1/search?q=NevisWealth",
+					"raw": "localhost:8888/api/v1/search?q=CentralPerk",
 					"host": [
 						"localhost"
 					],
@@ -170,7 +170,7 @@
 					"query": [
 						{
 							"key": "q",
-							"value": "NevisWealth"
+							"value": "CentralPerk"
 						}
 					]
 				}

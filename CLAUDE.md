@@ -89,8 +89,9 @@ PostgreSQL 16 with the `pgvector` extension. Schema managed by Flyway (`src/main
 Key schema features:
 - `tsvector` generated columns for FTS with GIN indexes
 - HNSW index on document embeddings for fast ANN search
-- Soft deletes via `state` column (ACTIVE/inactive)
+- `state` columns exist on clients and documents for future soft-delete support, but current queries do not filter on them
 - `UNIQUE (lower(email)) WHERE state = 'ACTIVE'` partial index on clients
+- `documents.client_id` is checked in application code before insert, but is not currently enforced by a database foreign key
 - `wal_level=logical` configured for Debezium CDC
 - `dbz_publication` pgoutput publication for Debezium replication slot
 
@@ -110,12 +111,17 @@ Debezium connector config: `services/debezium/connector-config.json`
 ### Testing
 
 - **`AppTest`** — Verticle orchestration and startup
-- **`ApiVerticleTest`** — HTTP layer (uses WireMock for event bus stubs)
+- **`ApiVerticleTest`** — HTTP layer (uses WireMock to stub the embedding HTTP service while deploying real verticles)
 - **`RepositoryVerticleTest`** — Database layer (uses Testcontainers: `pgvector/pgvector:pg16`)
 - **`EmbeddingVerticleTest`** — Embedding service integration (uses WireMock)
 - **`EmbeddingIngesterVerticleTest`** — Kafka consumer integration (uses Testcontainers: `confluentinc/cp-kafka:7.9.0`)
 
 Tests use JUnit 5 + VertxExtension + AssertJ.
+
+## Current Behavior Notes
+
+- `/api/v1/search` depends on the embedding service for every query; if the embedding service is unavailable, search currently returns `500`.
+- Document creation does not depend on the embedding service being available at request time because embeddings are populated asynchronously through Kafka.
 
 ## Package Structure
 

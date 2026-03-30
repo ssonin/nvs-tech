@@ -74,7 +74,7 @@ class RepositoryVerticleTest {
     var clientData = new JsonObject()
       .put("first_name", "Chandler")
       .put("last_name", "Bing")
-      .put("email", "chandler.bing@neviswealth.com")
+      .put("email", "chandler.bing@centralperk.com")
       .put("description", "Sarcastic, self-deprecating office worker with a sharp sense of humor, " +
         "known for cracking jokes to deflect awkward situations.");
 
@@ -90,7 +90,7 @@ class RepositoryVerticleTest {
           .isNotNull();
         assertThat(client.getString("first_name")).isEqualTo("Chandler");
         assertThat(client.getString("last_name")).isEqualTo("Bing");
-        assertThat(client.getString("email")).isEqualTo("chandler.bing@neviswealth.com");
+        assertThat(client.getString("email")).isEqualTo("chandler.bing@centralperk.com");
         assertThat(client.getString("description")).contains("Sarcastic");
 
         createdClientId = client.getString("id");
@@ -106,7 +106,7 @@ class RepositoryVerticleTest {
     var duplicateClient = new JsonObject()
       .put("first_name", "Another")
       .put("last_name", "Chandler")
-      .put("email", "chandler.bing@neviswealth.com")
+      .put("email", "chandler.bing@centralperk.com")
       .put("description", "Trying to impersonate Chandler");
 
     vertx.eventBus().<JsonObject>request("clients.create", duplicateClient)
@@ -133,7 +133,7 @@ class RepositoryVerticleTest {
         assertThat(client.getString("id")).isEqualTo(createdClientId);
         assertThat(client.getString("first_name")).isEqualTo("Chandler");
         assertThat(client.getString("last_name")).isEqualTo("Bing");
-        assertThat(client.getString("email")).isEqualTo("chandler.bing@neviswealth.com");
+        assertThat(client.getString("email")).isEqualTo("chandler.bing@centralperk.com");
 
         ctx.completeNow();
       })));
@@ -289,9 +289,9 @@ class RepositoryVerticleTest {
 
   @Test
   @Order(10)
-  @DisplayName("search: 'neviswealth' must return client by email domain")
+  @DisplayName("search: 'centralperk' must return client by email domain")
   void searches_by_email(Vertx vertx, VertxTestContext ctx) {
-    vertx.eventBus().<JsonArray>request("search", searchRequest("neviswealth"))
+    vertx.eventBus().<JsonArray>request("search", searchRequest("centralperk"))
       .onComplete(ctx.succeeding(reply -> ctx.verify(() -> {
         var results = reply.body();
 
@@ -305,7 +305,7 @@ class RepositoryVerticleTest {
           .findFirst()
           .orElseThrow(() -> new AssertionError("Must find client by email domain"));
 
-        assertThat(clientResult.getString("email")).isEqualTo("chandler.bing@neviswealth.com");
+        assertThat(clientResult.getString("email")).isEqualTo("chandler.bing@centralperk.com");
         assertThat(clientResult.getString("first_name")).isEqualTo("Chandler");
 
         ctx.completeNow();

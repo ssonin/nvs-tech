@@ -128,7 +128,7 @@ class ApiVerticleTest {
     var clientData = new JsonObject()
       .put("first_name", "Monica")
       .put("last_name", "Geller")
-      .put("email", "monica.geller@neviswealth.com");
+      .put("email", "monica.geller@centralperk.com");
 
     webClient.post(API_V1 + "/clients")
       .putHeader("Content-Type", "application/json")

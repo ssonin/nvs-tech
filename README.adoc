@@ -648,7 +648,8 @@ The schema uses several PostgreSQL features:
 * *HNSW index*: Fast approximate nearest-neighbor search on embeddings
 * *GIN indexes*: Efficient full-text search lookups
 * *Partial unique indexes*: `UNIQUE (lower(email)) WHERE state = 'ACTIVE'`
-* *Soft deletes*: `state` column enables logical deletion (prepared for future use)
+* *State columns*: `state` exists on clients and documents for future soft-delete support, but current queries do not filter on it
+* *Application-enforced document ownership*: client existence is checked before document insert, but `documents.client_id` is not currently enforced by a database foreign key
 * *Timestamps*: Automatic `created_at` and `updated_at` tracking
 
 See migrations in link:src/main/resources/db/migration/[src/main/resources/db/migration/]:
@@ -690,6 +691,8 @@ docker compose up --build postgres kafka debezium embedding
 ----
 
 Integration tests use Testcontainers to spin up a PostgreSQL instance automatically and WireMock to mock the embedding service, ensuring tests run against realistic infrastructure without external dependencies.
+
+Some tests also use Kafka Testcontainers. A working Docker environment is required for the full suite.
 
 === Building Fat JAR
 
@@ -787,12 +790,14 @@ curl -X POST http://localhost:8000/embeddings \
 
 The response should contain a 384-dimensional embedding array.
 
+Note that `/api/v1/search` depends on the embedding service for every request. If the embedding service is down, search currently returns `500`, while document creation can still succeed because embeddings are populated asynchronously.
+
 === Embeddings not updating (CDC pipeline)
 
 Check Debezium connector status:
 [source,bash]
 ----
-curl http://localhost:8083/connectors/searchapi-connector/status
+curl http://localhost:8083/connectors/searchapi-postgres/status
 ----
 
 Check Kafka topics via Kafka UI at http://localhost:8080 - look for messages in `searchapi.message` and `searchapi.document.embedding`.
