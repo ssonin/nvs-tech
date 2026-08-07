@@ -4,7 +4,7 @@ import org.gradle.api.tasks.testing.logging.TestLogEvent.*
 plugins {
   java
   application
-  id("com.github.johnrengelman.shadow") version "8.1.1"
+  id("com.gradleup.shadow") version "9.6.1"
 }
 
 group = "ssonin"
@@ -64,8 +64,8 @@ dependencies {
 }
 
 java {
-  sourceCompatibility = JavaVersion.VERSION_21
-  targetCompatibility = JavaVersion.VERSION_21
+  sourceCompatibility = JavaVersion.VERSION_25
+  targetCompatibility = JavaVersion.VERSION_25
 }
 
 tasks.withType<ShadowJar> {

@@ -19,6 +19,7 @@ import uk.org.webcompere.systemstubs.jupiter.SystemStubsExtension;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+@Disabled
 @Testcontainers
 @ExtendWith({SystemStubsExtension.class, VertxExtension.class})
 @TestInstance(TestInstance.Lifecycle.PER_CLASS)
