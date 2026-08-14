@@ -11,12 +11,22 @@ val quarkusPlatformGroupId: String by project
 val quarkusPlatformArtifactId: String by project
 val quarkusPlatformVersion: String by project
 
+val assertjVersion: String by project
+
 dependencies {
   implementation(enforcedPlatform("${quarkusPlatformGroupId}:${quarkusPlatformArtifactId}:${quarkusPlatformVersion}"))
   implementation("io.quarkus:quarkus-arc")
   implementation("io.quarkus:quarkus-rest")
+
+  integrationTestImplementation("io.rest-assured:rest-assured")
+
+  testRuntimeOnly("org.junit.platform:junit-platform-launcher")
+
   testImplementation("io.quarkus:quarkus-junit")
-  testImplementation("io.rest-assured:rest-assured")
+  testImplementation("org.assertj:assertj-core:${assertjVersion}")
+  testImplementation("org.junit.jupiter:junit-jupiter")
+  testImplementation("org.mockito:mockito-core")
+  testImplementation("org.mockito:mockito-junit-jupiter")
 }
 
 group = "ssonin"
@@ -31,4 +41,8 @@ java {
 tasks.withType<JavaCompile> {
   options.encoding = "UTF-8"
   options.compilerArgs.add("-parameters")
+}
+
+tasks.check {
+  dependsOn(tasks.named("quarkusIntTest"))
 }
