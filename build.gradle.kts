@@ -1,4 +1,5 @@
 plugins {
+  idea
   java
   id("io.quarkus")
 }
@@ -16,9 +17,13 @@ val assertjVersion: String by project
 dependencies {
   implementation(enforcedPlatform("${quarkusPlatformGroupId}:${quarkusPlatformArtifactId}:${quarkusPlatformVersion}"))
   implementation("io.quarkus:quarkus-arc")
+  implementation("io.quarkus:quarkus-flyway")
+  implementation("io.quarkus:quarkus-jdbc-postgresql")
+  implementation("io.quarkus:quarkus-reactive-pg-client")
   implementation("io.quarkus:quarkus-rest")
 
   integrationTestImplementation("io.rest-assured:rest-assured")
+  integrationTestImplementation("org.testcontainers:testcontainers-postgresql")
 
   testRuntimeOnly("org.junit.platform:junit-platform-launcher")
 
@@ -31,6 +36,13 @@ dependencies {
 
 group = "ssonin"
 version = "1.0.0-SNAPSHOT"
+
+idea {
+  module {
+    testSources.from(sourceSets["integrationTest"].java.srcDirs)
+    testResources.from(sourceSets["integrationTest"].resources.srcDirs)
+  }
+}
 
 java {
   toolchain {
